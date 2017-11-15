@@ -5,8 +5,10 @@ author: 'Art Steinmetz'
 ---
 # testing Tidyquant Rblpapi integration
 
+Just a start. More validation to do.
+
 ```{r}
-#devtools::install_github("business-science/tidyquant")
+devtools::install_github("business-science/tidyquant")
 library(tidyverse)
 library(stringr)
 library(dplyr)
@@ -69,4 +71,159 @@ my_bloomberg_data <- c('SPX Index','AGTHX Equity') %>%
 my_bloomberg_data
 ```
 
-Eureka!
+Eureka!  So it works.  Do you want to be consistent with other get sources in nomenclature or be true to each separate api?
+
+```{r}
+my_bloomberg_data <- c('SPX Index','AGTHX Equity') %>%
+    tq_get(get         = "Rblpapi",
+           rblpapi_fun = "bdh",
+           fields      = c("PX_LAST","TOT_RETURN_INDEX_GROSS_DVDS"),
+           options     = c("periodicitySelection" = "MONTHLY"),
+           from        = "2016-01-01",
+           to          = "2016-12-31"
+           )
+           
+
+my_bloomberg_data
+```
+
+```{r}
+#single security, single field bdh
+my_bloomberg_data <- c('SPX Index') %>%
+    tq_get(get         = "Rblpapi",
+           rblpapi_fun = "bdh",
+           fields      = c("PX_LAST"),
+           options     = c("periodicitySelection" = "MONTHLY"),
+           from        = "2016-01-01",
+           to          = "2016-12-31"
+           )
+           
+
+my_bloomberg_data
+```
+# does omission of 'to' field default to sys.date?
+```{r}
+# does omission of 'to' field default to sys.date?
+my_bloomberg_data <- c('SPX Index') %>%
+    tq_get(get         = "Rblpapi",
+           rblpapi_fun = "bdh",
+           fields      = c("PX_LAST"),
+           options     = c("periodicitySelection" = "MONTHLY"),
+           from        = "2017-01-01"
+           )
+           
+
+my_bloomberg_data
+```
+Yes, it does!
+
+
+#Vary periodicity
+```{r}
+#vary periodicity
+my_bloomberg_data <- c('SPX Index','ODMAX Equity') %>%
+    tq_get(get         = "Rblpapi",
+           rblpapi_fun = "bdh",
+           fields      = c("PX_LAST"),
+           options     = c("periodicitySelection" = "WEEKLY"),
+           from        = "2016-01-01",
+           to          = "2016-12-31"
+           )
+           
+
+my_bloomberg_data
+```
+```{r}
+#vary periodicity
+my_bloomberg_data <- c('SPX Index','ODMAX Equity') %>%
+    tq_get(get         = "Rblpapi",
+           rblpapi_fun = "bdh",
+           fields      = c("PX_LAST"),
+           options     = c("periodicitySelection" = "DAILY"),
+           from        = "2016-01-01",
+           to          = "2016-12-31"
+           )
+           
+
+my_bloomberg_data
+```
+#mix sec types
+```{r}
+#mix sec types
+my_bloomberg_data <- c('GT10 Govt','ODMAX Equity') %>%
+    tq_get(get         = "Rblpapi",
+           rblpapi_fun = "bdh",
+           fields      = c("PX_LAST"),
+           options     = c("periodicitySelection" = "DAILY"),
+           from        = "2016-01-01",
+           to          = "2016-3-30"
+           )
+           
+
+my_bloomberg_data
+```
+#show that sectype dates don't align due to varying holidays
+# not in scope of tidyquant
+
+```{r}
+#show that sectype dates don't align due to varying holidays
+# not in scope of tidyquant
+my_bloomberg_data %>% 
+  spread(symbol,PX_LAST) %>% 
+  filter(is.na(`ODMAX Equity`))
+
+```
+
+#try some overrides from Rblpapi documentation
+```{r}
+#try some overrides from Rblpapi documentation
+## example for an options field: request monthly data; see section A.2.4 of
+## http://www.bloomberglabs.com/content/uploads/sites/2/2014/07/blpapi-developers-guide-2.54.pdf
+## for more
+opt <- c("periodicitySelection"="MONTHLY")
+start.date=Sys.Date()-31*6
+
+my_bloomberg_data <- c('SPY US Equity') %>%
+    tq_get(get         = "Rblpapi",
+           rblpapi_fun = "bdh",
+           fields      = c("PX_LAST", "VOLUME"),
+           options     = opt,
+           from        = start.date
+           )
+           
+my_bloomberg_data
+```
+##demonstrate that override parameter works as intended
+```{r}
+
+## example for options and overrides
+opt <- c("periodicitySelection" = "QUARTERLY")
+ovrd <- c("BEST_FPERIOD_OVERRIDE"="1GQ")
+start.date=Sys.Date()-365.25
+         
+#no override
+my_bloomberg_data <- c('IBM US Equity') %>%
+    tq_get(get         = "Rblpapi",
+           rblpapi_fun = "bdh",
+           fields      = c("BEST_SALES"),
+           options     = opt,
+           #overrides   = ovrd,
+           from        = start.date
+           ) %>% 
+  mutate(Override="No")
+
+#with override
+my_bloomberg_data <- c('IBM US Equity') %>%
+    tq_get(get         = "Rblpapi",
+           rblpapi_fun = "bdh",
+           fields      = c("BEST_SALES"),
+           options     = opt,
+           overrides   = ovrd,
+           from        = start.date
+           ) %>% 
+  mutate(Override="Yes") %>% 
+  bind_rows(my_bloomberg_data)
+
+#should show the effect of this override
+my_bloomberg_data
+```
