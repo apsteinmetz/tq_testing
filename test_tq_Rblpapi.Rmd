@@ -1,0 +1,72 @@
+---
+title: "test_tq_Rblpapi"
+output: html_notebook
+author: 'Art Steinmetz'
+---
+# testing Tidyquant Rblpapi integration
+
+```{r}
+#devtools::install_github("business-science/tidyquant")
+library(tidyverse)
+library(stringr)
+library(dplyr)
+library(lubridate)
+library(Rblpapi)
+library(tidyquant)
+#don't forget to connect!
+# I build it into my version of bdh
+Rblpapi::blpConnect()
+
+# my tidy bdh wrapper as a control
+art_tidy_bdh<-function(secs,...){
+  blpConnect() #must have a valid blp session running
+  blp_bdh  <-bdh(secs,...=...)
+  blp_bdh_tq<-bind_rows(blp_bdh,.id='ticker') %>%
+    mutate(sector=word(ticker,-1)) %>% 
+    mutate(ticker=word(ticker,1)) %>% 
+    select(date,ticker,everything())%>%
+    group_by(sector,ticker)
+  #special case of one ticker
+  if (length(secs)==1){
+    blp_bdh_tq$ticker=word(secs,1)
+    blp_bdh_tq$sector=word(secs,-1)
+  }
+  
+  return(blp_bdh_tq)
+}
+
+```
+
+Here is the sample from your github issue comment
+```{r}
+my_bloomberg_data <- c('SPX Index','AGTHX Equity') %>%
+    tq_get(get         = "rblpapi",
+           rblpapi_fun = "bdh",
+           fields      = c('RETURN','PRICE'),
+           options     = c("periodicitySelection" = "MONTHLY"),
+           from        = "2016-01-01",
+           to          = "2016-12-31")
+```
+Obvious issues.  
+
+Invalid fields. Valid would be <code>LAST_PRICE</code> and <code>TOT_RETURN_INDEX_GROSS_DVDS</code>.  That is not the responsibility of tq_get.
+
+<code>from</code> and <code>to</code> need to be <code>start.date</code> and <code>end.date</code> to be passed to bdh and need to be valid dates, not character strings.
+
+Let's try to fix.
+
+```{r}
+my_bloomberg_data <- c('SPX Index','AGTHX Equity') %>%
+    tq_get(get         = "rblpapi",
+           rblpapi_fun = "bdh",
+           fields      = c("PX_LAST","TOT_RETURN_INDEX_GROSS_DVDS"),
+           options     = c("periodicitySelection" = "MONTHLY"),
+           start.date        = as.Date("2016-01-01"),
+           end.date          = as.Date("2016-12-31")
+           )
+           
+
+my_bloomberg_data
+```
+
+Eureka!
