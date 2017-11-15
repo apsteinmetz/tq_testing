@@ -1,6 +1,6 @@
 ---
 title: "test_tq_Rblpapi"
-output: html_notebook
+output: github_document
 author: 'Art Steinmetz'
 ---
 # testing Tidyquant Rblpapi integration
@@ -15,6 +15,7 @@ library(dplyr)
 library(lubridate)
 library(Rblpapi)
 library(tidyquant)
+library(reprex)
 #don't forget to connect!
 # I build it into my version of bdh
 Rblpapi::blpConnect()
