@@ -208,10 +208,10 @@ my_bloomberg_data
     ## # A tibble: 6 x 4
     ##            symbol CURRENT_TRR_1YR PEER_RANKING FUND_BENCHMARK_PRIM
     ##             <chr>           <dbl>        <int>               <chr>
-    ## 1 DODFX US Equity       22.889710           63                MXEA
-    ## 2 DODGX US Equity       14.656710           48                 SPX
-    ## 3 DODIX US Equity        4.146775           75            LBUSTRUU
-    ## 4 DODWX US Equity       18.534010           33                M1WO
+    ## 1 DODFX US Equity       23.997070           63                MXEA
+    ## 2 DODGX US Equity       15.851300           48                 SPX
+    ## 3 DODIX US Equity        4.071422           75            LBUSTRUU
+    ## 4 DODWX US Equity       19.661250           33                M1WO
     ## 5       SPX Index       21.201810           NA                    
     ## 6  LBUSTRUU Index        2.774545           NA
 
@@ -231,10 +231,10 @@ my_bloomberg_data
     ## # A tibble: 6 x 4
     ##            symbol CURRENT_ANN_TRR_3YR PEER_RANKING FUND_BENCHMARK_PRIM
     ##             <chr>               <dbl>        <int>               <chr>
-    ## 1 DODFX US Equity            3.649590           22                MXEA
-    ## 2 DODGX US Equity            9.140778           85                 SPX
-    ## 3 DODIX US Equity            3.024889           81            LBUSTRUU
-    ## 4 DODWX US Equity            6.940759           74                M1WO
+    ## 1 DODFX US Equity            3.959139           22                MXEA
+    ## 2 DODGX US Equity            9.517473           85                 SPX
+    ## 3 DODIX US Equity            3.000104           81            LBUSTRUU
+    ## 4 DODWX US Equity            7.277763           74                M1WO
     ## 5       SPX Index           10.495980           NA                    
     ## 6  LBUSTRUU Index            2.390614           NA
 
@@ -254,12 +254,86 @@ my_bloomberg_data
     ## # A tibble: 6 x 4
     ##            symbol CURRENT_ANN_TRR_5YR PEER_RANKING FUND_BENCHMARK_PRIM
     ##             <chr>               <dbl>        <int>               <chr>
-    ## 1 DODFX US Equity            9.805865           66                MXEA
-    ## 2 DODGX US Equity           16.489940           97                 SPX
-    ## 3 DODIX US Equity            3.034104           86            LBUSTRUU
-    ## 4 DODWX US Equity           13.812470           95                M1WO
+    ## 1 DODFX US Equity           10.002940           66                MXEA
+    ## 2 DODGX US Equity           16.731530           97                 SPX
+    ## 3 DODIX US Equity            3.019197           86            LBUSTRUU
+    ## 4 DODWX US Equity           14.028000           95                M1WO
     ## 5       SPX Index           16.117900           NA                    
     ## 6  LBUSTRUU Index            2.008912           NA
+
+deliberate errors
+=================
+
+Bad security ticker
+
+``` r
+bad_sec = "some nonsense"
+my_fields=c("CURRENT_ANN_TRR_5YR","PEER_RANKING","FUND_BENCHMARK_PRIM")
+ovr<-c("PEER_RANKING_PERIOD"='5Y')
+my_bloomberg_data <- bad_sec %>%
+    tq_get(get         = "Rblpapi",
+           rblpapi_fun = "bdp",
+           overrides = ovr,
+           fields      = my_fields
+           )
+
+my_bloomberg_data
+```
+
+    ## # A tibble: 1 x 3
+    ##   CURRENT_ANN_TRR_5YR PEER_RANKING FUND_BENCHMARK_PRIM
+    ## *               <dbl>        <int>               <chr>
+    ## 1                  NA           NA
+
+empty table. No error message. Suggests verbose=TRUE.
+
+now a bad field.
+
+``` r
+my_fields=c("blah blah")
+ovr<-c("PEER_RANKING_PERIOD"='5Y')
+my_bloomberg_data <- secs %>%
+    tq_get(get         = "Rblpapi",
+           rblpapi_fun = "bdp",
+           overrides = ovr,
+           fields      = my_fields
+           )
+```
+
+    ## Warning: x = 'DODFX US Equity', get = 'Rblpapi': Error in bdp_Impl(con, securities, fields, options, overrides, verbose, : Bad field: BLAH BLAH
+    ## 
+    ##  Removing DODFX US Equity.
+
+    ## Warning: x = 'DODGX US Equity', get = 'Rblpapi': Error in bdp_Impl(con, securities, fields, options, overrides, verbose, : Bad field: BLAH BLAH
+    ## 
+    ##  Removing DODGX US Equity.
+
+    ## Warning: x = 'DODIX US Equity', get = 'Rblpapi': Error in bdp_Impl(con, securities, fields, options, overrides, verbose, : Bad field: BLAH BLAH
+    ## 
+    ##  Removing DODIX US Equity.
+
+    ## Warning: x = 'DODWX US Equity', get = 'Rblpapi': Error in bdp_Impl(con, securities, fields, options, overrides, verbose, : Bad field: BLAH BLAH
+    ## 
+    ##  Removing DODWX US Equity.
+
+    ## Warning: x = 'SPX Index', get = 'Rblpapi': Error in bdp_Impl(con, securities, fields, options, overrides, verbose, : Bad field: BLAH BLAH
+    ## 
+    ##  Removing SPX Index.
+
+    ## Warning: x = 'LBUSTRUU Index', get = 'Rblpapi': Error in bdp_Impl(con, securities, fields, options, overrides, verbose, : Bad field: BLAH BLAH
+    ## 
+    ##  Removing LBUSTRUU Index.
+
+    ## Warning in value[[3L]](cond): Returning as nested data frame.
+
+``` r
+my_bloomberg_data
+```
+
+    ## # A tibble: 0 x 2
+    ## # ... with 2 variables: symbol <chr>, Rblpapi <list>
+
+useful error message.
 
 try verbose=TRUE flag
 =====================
@@ -284,7 +358,7 @@ my_bloomberg_data <- bad_sec %>%
     ##             eidData[] = {
     ##             }
     ##             securityError = {
-    ##                 source = "118::bbdbd9"
+    ##                 source = "118::bbdbd5"
     ##                 code = 3
     ##                 category = "BAD_SEC"
     ##                 message = "Unknown/Invalid Security  [nid:118] "
@@ -335,7 +409,7 @@ my_bloomberg_data <- secs[1:4] %>%
     ##             }
     ##             sequenceNumber = 0
     ##             fieldData = {
-    ##                 CURRENT_ANN_TRR_5YR = 9.805865
+    ##                 CURRENT_ANN_TRR_5YR = 10.002940
     ##                 PEER_RANKING = 66
     ##                 FUND_BENCHMARK_PRIM = "MXEA"
     ##             }
@@ -352,7 +426,7 @@ my_bloomberg_data <- secs[1:4] %>%
     ##             }
     ##             sequenceNumber = 0
     ##             fieldData = {
-    ##                 CURRENT_ANN_TRR_5YR = 16.489930
+    ##                 CURRENT_ANN_TRR_5YR = 16.731530
     ##                 PEER_RANKING = 97
     ##                 FUND_BENCHMARK_PRIM = "SPX"
     ##             }
@@ -369,7 +443,7 @@ my_bloomberg_data <- secs[1:4] %>%
     ##             }
     ##             sequenceNumber = 0
     ##             fieldData = {
-    ##                 CURRENT_ANN_TRR_5YR = 3.034104
+    ##                 CURRENT_ANN_TRR_5YR = 3.019197
     ##                 PEER_RANKING = 86
     ##                 FUND_BENCHMARK_PRIM = "LBUSTRUU"
     ##             }
@@ -386,7 +460,7 @@ my_bloomberg_data <- secs[1:4] %>%
     ##             }
     ##             sequenceNumber = 0
     ##             fieldData = {
-    ##                 CURRENT_ANN_TRR_5YR = 13.812470
+    ##                 CURRENT_ANN_TRR_5YR = 14.028000
     ##                 PEER_RANKING = 95
     ##                 FUND_BENCHMARK_PRIM = "M1WO"
     ##             }
@@ -401,9 +475,9 @@ my_bloomberg_data
     ## # A tibble: 4 x 4
     ##            symbol CURRENT_ANN_TRR_5YR PEER_RANKING FUND_BENCHMARK_PRIM
     ##             <chr>               <dbl>        <int>               <chr>
-    ## 1 DODFX US Equity            9.805865           66                MXEA
-    ## 2 DODGX US Equity           16.489930           97                 SPX
-    ## 3 DODIX US Equity            3.034104           86            LBUSTRUU
-    ## 4 DODWX US Equity           13.812470           95                M1WO
+    ## 1 DODFX US Equity           10.002940           66                MXEA
+    ## 2 DODGX US Equity           16.731530           97                 SPX
+    ## 3 DODIX US Equity            3.019197           86            LBUSTRUU
+    ## 4 DODWX US Equity           14.028000           95                M1WO
 
 Good.
