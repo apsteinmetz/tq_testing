@@ -16,6 +16,7 @@ library(lubridate)
 library(Rblpapi)
 library(tidyquant)
 library(reprex)
+library(Rblpapi)
 
 ```
 
@@ -186,4 +187,33 @@ my_bloomberg_data <- c('IBM US Equity') %>%
 
 #should show the effect of this override
 my_bloomberg_data
+```
+#test speed
+```{r}
+tq_way<-function(){
+  my_bloomberg_data <- c('SPX Index','ODMAX Equity') %>%
+    tq_get(get         = "Rblpapi",
+           rblpapi_fun = "bdh",
+           fields      = c("PX_LAST"),
+           options     = c("periodicitySelection" = "DAILY"),
+           from        = "2006-01-01",
+           to          = "2016-12-31"
+           )
+  my_bloomberg_data
+
+}
+
+old_way<-function(){
+  my_bloomberg_data <- c('SPX Index','ODMAX Equity') %>%
+    bdh(   fields      = c("PX_LAST"),
+           options     = c("periodicitySelection" = "DAILY"),
+           start.date        = as.Date("2006-01-01"),
+           end.date          = as.Date("2016-12-31")
+           )
+  my_bloomberg_data
+
+}
+microbenchmark::microbenchmark(old_way,tq_way(),times=1)
+system.time(tq_way())
+system.time(old_way())
 ```

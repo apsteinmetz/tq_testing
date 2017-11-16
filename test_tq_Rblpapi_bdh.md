@@ -103,6 +103,10 @@ library(reprex)
 
     ## Warning: package 'reprex' was built under R version 3.4.2
 
+``` r
+library(Rblpapi)
+```
+
 initial test
 
 ``` r
@@ -421,3 +425,55 @@ my_bloomberg_data
     ## 6 2017-03-31   21615.75       No
     ## 7 2017-06-30   21803.47       No
     ## 8 2017-09-29   21835.18       No
+
+test speed
+==========
+
+``` r
+tq_way<-function(){
+  my_bloomberg_data <- c('SPX Index','ODMAX Equity') %>%
+    tq_get(get         = "Rblpapi",
+           rblpapi_fun = "bdh",
+           fields      = c("PX_LAST"),
+           options     = c("periodicitySelection" = "DAILY"),
+           from        = "2006-01-01",
+           to          = "2016-12-31"
+           )
+  my_bloomberg_data
+
+}
+
+old_way<-function(){
+  my_bloomberg_data <- c('SPX Index','ODMAX Equity') %>%
+    bdh(   fields      = c("PX_LAST"),
+           options     = c("periodicitySelection" = "DAILY"),
+           start.date        = as.Date("2006-01-01"),
+           end.date          = as.Date("2016-12-31")
+           )
+  my_bloomberg_data
+
+}
+microbenchmark::microbenchmark(old_way,tq_way(),times=1)
+```
+
+    ## Unit: nanoseconds
+    ##      expr       min        lq      mean    median        uq       max
+    ##   old_way       605       605       605       605       605       605
+    ##  tq_way() 390924415 390924415 390924415 390924415 390924415 390924415
+    ##  neval
+    ##      1
+    ##      1
+
+``` r
+system.time(tq_way())
+```
+
+    ##    user  system elapsed 
+    ##    0.04    0.00    0.39
+
+``` r
+system.time(old_way())
+```
+
+    ##    user  system elapsed 
+    ##    0.02    0.00    0.28
