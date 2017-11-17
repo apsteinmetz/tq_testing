@@ -484,29 +484,29 @@ my_way<-function(){
 microbenchmark::microbenchmark(direct_way,tq_way(),my_way(),times=1)
 ```
 
-    ## Unit: nanoseconds
-    ##        expr       min        lq      mean    median        uq       max
-    ##  direct_way       605       605       605       605       605       605
-    ##    tq_way() 370358263 370358263 370358263 370358263 370358263 370358263
-    ##    my_way() 485450170 485450170 485450170 485450170 485450170 485450170
-    ##  neval
-    ##      1
-    ##      1
-    ##      1
+    ## Unit: microseconds
+    ##        expr        min         lq       mean     median         uq
+    ##  direct_way      3.322      3.322      3.322      3.322      3.322
+    ##    tq_way() 386101.035 386101.035 386101.035 386101.035 386101.035
+    ##    my_way() 468472.500 468472.500 468472.500 468472.500 468472.500
+    ##         max neval
+    ##       3.322     1
+    ##  386101.035     1
+    ##  468472.500     1
 
 ``` r
 system.time(direct_way())
 ```
 
     ##    user  system elapsed 
-    ##    0.01    0.00    0.25
+    ##    0.01    0.00    0.34
 
 ``` r
 system.time(tq_way())
 ```
 
     ##    user  system elapsed 
-    ##    0.05    0.04    0.38
+    ##    0.06    0.00    0.42
 
 ``` r
 system.time(my_way())
