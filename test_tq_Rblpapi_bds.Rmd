@@ -1,0 +1,71 @@
+---
+title: "test_tq_Rblpapi_bds"
+output: github_document
+author: 'Art Steinmetz'
+---
+# testing Tidyquant Rblpapi integration
+
+validate some variations on <code>bds()</code>
+
+```{r}
+devtools::install_github("business-science/tidyquant")
+library(tidyverse)
+library(stringr)
+library(dplyr)
+library(lubridate)
+library(Rblpapi)
+library(tidyquant)
+library(reprex)
+library(Rblpapi)
+
+```
+
+#initial test
+# from Rblpapi docs using Rblpapi::bdp(), not tq_get()
+```{r}
+# Get BBG Descriptive Data
+## Not run:
+## simple query
+blpConnect()
+bds("GOOG US Equity", "TOP_20_HOLDERS_PUBLIC_FILINGS")
+```
+
+#using tq_get
+```{r}
+my_bloomberg_data <- c('GOOG US Equity') %>%
+    tq_get(get         = "rblpapi",
+           rblpapi_fun = "bds",
+           field     = c("TOP_20_HOLDERS_PUBLIC_FILINGS")
+           )
+
+```
+The parameter names for bds() differ slightly from bdp() and bdh().
+<code>securities</code> becomes <code>security</code> and that blows up piping in the ticker symbols.   <code>fields</code> becomes <code>field</code> 
+
+#bds() with proper parameter names.
+
+Commented out because otherwise execution halts.  Error message shown below.
+
+```{r}
+#my_bloomberg_data <-  tq_get(security = 'GOOG US Equity',
+#                             get = "rblpapi",
+#                             rblpapi_fun = "bds",
+#                             field = c("TOP_20_HOLDERS_PUBLIC_FILINGS")
+#           )
+
+
+```
+Error in tq_get(security = "GOOG US Equity", get = "rblpapi", rblpapi_fun = "bds",  : 
+  argument "x" is missing, with no default
+  
+doesn't work.
+```{r}
+my_bloomberg_data <-  tq_get(x = 'GOOG US Equity',
+                             get = "rblpapi",
+                             rblpapi_fun = "bds",
+                             field = c("TOP_20_HOLDERS_PUBLIC_FILINGS")
+           )
+
+
+```
+also doesn't work.
