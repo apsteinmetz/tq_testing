@@ -18,6 +18,25 @@ library(tidyquant)
 library(reprex)
 library(Rblpapi)
 
+# my tidy bdh wrapper as a control
+art_tidy_bdh<-function(secs,...){
+  blpConnect() #must have a valid blp session running
+  blp_bdh  <-bdh(secs,...=...)
+  blp_bdh_tq<-bind_rows(blp_bdh,.id='ticker') %>%
+    mutate(sector=word(ticker,-1)) %>% 
+    mutate(ticker=word(ticker,1)) %>% 
+    select(date,ticker,everything())%>%
+    group_by(sector,ticker)
+  #special case of one ticker
+  if (length(secs)==1){
+    blp_bdh_tq$ticker=word(secs,1)
+    blp_bdh_tq$sector=word(secs,-1)
+  }
+  
+  return(blp_bdh_tq)
+}
+
+
 ```
 
 initial test
@@ -203,7 +222,7 @@ tq_way<-function(){
 
 }
 
-old_way<-function(){
+direct_way<-function(){
   my_bloomberg_data <- c('SPX Index','ODMAX Equity') %>%
     bdh(   fields      = c("PX_LAST"),
            options     = c("periodicitySelection" = "DAILY"),
@@ -213,7 +232,18 @@ old_way<-function(){
   my_bloomberg_data
 
 }
-microbenchmark::microbenchmark(old_way,tq_way(),times=1)
+my_way<-function(){
+  my_bloomberg_data <- c('SPX Index','ODMAX Equity') %>%
+    art_tidy_bdh(   fields      = c("PX_LAST"),
+           options     = c("periodicitySelection" = "DAILY"),
+           start.date        = as.Date("2006-01-01"),
+           end.date          = as.Date("2016-12-31")
+           )
+  my_bloomberg_data
+
+}
+microbenchmark::microbenchmark(direct_way,tq_way(),my_way(),times=1)
+system.time(direct_way())
 system.time(tq_way())
-system.time(old_way())
+system.time(my_way())
 ```
