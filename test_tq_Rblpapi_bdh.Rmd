@@ -39,6 +39,23 @@ art_tidy_bdh<-function(secs,...){
 
 ```
 
+Use Rblpapi::bdh() directly
+```{r}
+blpConnect()
+my_bloomberg_data <- c('SPX Index','AGTHX Equity') %>%
+  bdh(
+    fields      = c("PX_LAST","TOT_RETURN_INDEX_GROSS_DVDS"),
+    options     = c("periodicitySelection" = "MONTHLY"),
+    start.date        = as.Date("2016-01-01"),
+    end.date          = as.Date("2016-12-31")
+  )
+
+my_bloomberg_data
+
+saveRDS(my_bloomberg_data,file="output_bdh.rds")
+```
+
+
 initial test
 ```{r}
 my_bloomberg_data <- c('SPX Index','AGTHX Equity') %>%

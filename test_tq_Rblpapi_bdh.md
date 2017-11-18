@@ -18,32 +18,26 @@ devtools::install_github("business-science/tidyquant")
 library(tidyverse)
 ```
 
-    ## -- Attaching packages ---------------------------------- tidyverse 1.2.1 --
+    ## Warning: package 'tidyverse' was built under R version 3.4.2
 
-    ## v tibble  1.3.4     v purrr   0.2.4
+    ## -- Attaching packages ---------------------------------------------------------------------------- tidyverse 1.2.1 --
+
+    ## v ggplot2 2.2.1     v purrr   0.2.4
+    ## v tibble  1.3.4     v dplyr   0.7.4
     ## v tidyr   0.7.2     v stringr 1.2.0
     ## v readr   1.1.1     v forcats 0.2.0
 
-    ## Warning: package 'tibble' was built under R version 3.4.1
+    ## Warning: package 'tibble' was built under R version 3.4.2
 
     ## Warning: package 'tidyr' was built under R version 3.4.2
 
     ## Warning: package 'purrr' was built under R version 3.4.2
 
-    ## -- Conflicts ------------------------------------- tidyverse_conflicts() --
-    ## x dplyr::arrange()   masks plyr::arrange()
-    ## x purrr::compact()   masks plyr::compact()
-    ## x dplyr::count()     masks plyr::count()
-    ## x dplyr::failwith()  masks plyr::failwith()
-    ## x dplyr::filter()    masks stats::filter()
-    ## x dplyr::first()     masks xts::first()
-    ## x dplyr::id()        masks plyr::id()
-    ## x dplyr::lag()       masks stats::lag()
-    ## x dplyr::last()      masks xts::last()
-    ## x dplyr::mutate()    masks plyr::mutate()
-    ## x dplyr::rename()    masks plyr::rename()
-    ## x dplyr::summarise() masks plyr::summarise()
-    ## x dplyr::summarize() masks plyr::summarize()
+    ## Warning: package 'dplyr' was built under R version 3.4.2
+
+    ## -- Conflicts ------------------------------------------------------------------------------- tidyverse_conflicts() --
+    ## x dplyr::filter() masks stats::filter()
+    ## x dplyr::lag()    masks stats::lag()
 
 ``` r
 library(stringr)
@@ -55,10 +49,6 @@ library(lubridate)
 
     ## 
     ## Attaching package: 'lubridate'
-
-    ## The following object is masked from 'package:plyr':
-    ## 
-    ##     here
 
     ## The following object is masked from 'package:base':
     ## 
@@ -76,24 +66,51 @@ library(Rblpapi)
 library(tidyquant)
 ```
 
+    ## Loading required package: PerformanceAnalytics
+
+    ## Loading required package: xts
+
+    ## Loading required package: zoo
+
+    ## 
+    ## Attaching package: 'zoo'
+
+    ## The following objects are masked from 'package:base':
+    ## 
+    ##     as.Date, as.Date.numeric
+
+    ## 
+    ## Attaching package: 'xts'
+
+    ## The following objects are masked from 'package:dplyr':
+    ## 
+    ##     first, last
+
+    ## 
+    ## Attaching package: 'PerformanceAnalytics'
+
+    ## The following object is masked from 'package:graphics':
+    ## 
+    ##     legend
+
     ## Loading required package: quantmod
 
     ## Warning: package 'quantmod' was built under R version 3.4.2
 
     ## Loading required package: TTR
 
-    ## Warning: package 'TTR' was built under R version 3.4.1
+    ## Warning: package 'TTR' was built under R version 3.4.2
 
     ## Version 0.4-0 included new data defaults. See ?getSymbols.
 
     ## 
     ## Attaching package: 'tidyquant'
 
-    ## The following object is masked from 'package:tibble':
+    ## The following object is masked from 'package:dplyr':
     ## 
     ##     as_tibble
 
-    ## The following object is masked from 'package:dplyr':
+    ## The following object is masked from 'package:tibble':
     ## 
     ##     as_tibble
 
@@ -125,6 +142,55 @@ art_tidy_bdh<-function(secs,...){
 }
 ```
 
+Use Rblpapi::bdh() directly
+
+``` r
+blpConnect()
+my_bloomberg_data <- c('SPX Index','AGTHX Equity') %>%
+  bdh(
+    fields      = c("PX_LAST","TOT_RETURN_INDEX_GROSS_DVDS"),
+    options     = c("periodicitySelection" = "MONTHLY"),
+    start.date        = as.Date("2016-01-01"),
+    end.date          = as.Date("2016-12-31")
+  )
+
+my_bloomberg_data
+```
+
+    ## $`SPX Index`
+    ##          date PX_LAST TOT_RETURN_INDEX_GROSS_DVDS
+    ## 1  2016-01-29 1940.24                    1940.240
+    ## 2  2016-02-29 1932.23                    1937.517
+    ## 3  2016-03-31 2059.74                    2068.869
+    ## 4  2016-04-29 2065.30                    2076.904
+    ## 5  2016-05-31 2096.96                    2114.097
+    ## 6  2016-06-30 2098.86                    2119.557
+    ## 7  2016-07-29 2173.60                    2197.635
+    ## 8  2016-08-31 2170.95                    2200.734
+    ## 9  2016-09-30 2168.27                    2201.125
+    ## 10 2016-10-31 2126.15                    2161.000
+    ## 11 2016-11-30 2198.81                    2240.918
+    ## 12 2016-12-30 2238.83                    2285.077
+    ## 
+    ## $`AGTHX Equity`
+    ##          date PX_LAST TOT_RETURN_INDEX_GROSS_DVDS
+    ## 1  2016-01-29   38.19                     38.1900
+    ## 2  2016-02-29   37.79                     37.7900
+    ## 3  2016-03-31   40.24                     40.2400
+    ## 4  2016-04-29   40.91                     40.9100
+    ## 5  2016-05-31   41.77                     41.7700
+    ## 6  2016-06-30   41.40                     41.4000
+    ## 7  2016-07-29   43.21                     43.2100
+    ## 8  2016-08-31   43.47                     43.4700
+    ## 9  2016-09-30   44.08                     44.0800
+    ## 10 2016-10-31   43.27                     43.2700
+    ## 11 2016-11-30   44.53                     44.5300
+    ## 12 2016-12-30   42.04                     44.8196
+
+``` r
+saveRDS(my_bloomberg_data,file="output_bdh.rds")
+```
+
 initial test
 
 ``` r
@@ -135,24 +201,23 @@ my_bloomberg_data <- c('SPX Index','AGTHX Equity') %>%
            options     = c("periodicitySelection" = "MONTHLY"),
            from        = "2016-01-01",
            to          = "2016-12-31")
-```
-
-    ## Warning: package 'bindrcpp' was built under R version 3.4.1
-
-    ## Warning: x = 'SPX Index', get = 'Rblpapi': Error: No connection object has been created. Use 'blpConnect()' first.
-    ##  Removing SPX Index.
-
-    ## Warning: x = 'AGTHX Equity', get = 'Rblpapi': Error: No connection object has been created. Use 'blpConnect()' first.
-    ##  Removing AGTHX Equity.
-
-    ## Warning in value[[3L]](cond): Returning as nested data frame.
-
-``` r
 my_bloomberg_data
 ```
 
-    ## # A tibble: 0 x 2
-    ## # ... with 2 variables: symbol <chr>, rblpapi <list>
+    ## # A tibble: 24 x 4
+    ##       symbol       date PX_LAST TOT_RETURN_INDEX_GROSS_DVDS
+    ##        <chr>     <date>   <dbl>                       <dbl>
+    ##  1 SPX Index 2016-01-29 1940.24                    1940.240
+    ##  2 SPX Index 2016-02-29 1932.23                    1937.517
+    ##  3 SPX Index 2016-03-31 2059.74                    2068.869
+    ##  4 SPX Index 2016-04-29 2065.30                    2076.904
+    ##  5 SPX Index 2016-05-31 2096.96                    2114.097
+    ##  6 SPX Index 2016-06-30 2098.86                    2119.557
+    ##  7 SPX Index 2016-07-29 2173.60                    2197.635
+    ##  8 SPX Index 2016-08-31 2170.95                    2200.734
+    ##  9 SPX Index 2016-09-30 2168.27                    2201.125
+    ## 10 SPX Index 2016-10-31 2126.15                    2161.000
+    ## # ... with 14 more rows
 
 Use `start.date` and 'end.date' instead of `from/to`
 
@@ -165,22 +230,25 @@ my_bloomberg_data <- c('SPX Index','AGTHX Equity') %>%
            start.date        = as.Date("2016-01-01"),
            end.date          = as.Date("2016-12-31")
            )
-```
+           
 
-    ## Warning: x = 'SPX Index', get = 'Rblpapi': Error: No connection object has been created. Use 'blpConnect()' first.
-    ##  Removing SPX Index.
-
-    ## Warning: x = 'AGTHX Equity', get = 'Rblpapi': Error: No connection object has been created. Use 'blpConnect()' first.
-    ##  Removing AGTHX Equity.
-
-    ## Warning in value[[3L]](cond): Returning as nested data frame.
-
-``` r
 my_bloomberg_data
 ```
 
-    ## # A tibble: 0 x 2
-    ## # ... with 2 variables: symbol <chr>, rblpapi <list>
+    ## # A tibble: 24 x 4
+    ##       symbol       date PX_LAST TOT_RETURN_INDEX_GROSS_DVDS
+    ##        <chr>     <date>   <dbl>                       <dbl>
+    ##  1 SPX Index 2016-01-29 1940.24                    1940.240
+    ##  2 SPX Index 2016-02-29 1932.23                    1937.517
+    ##  3 SPX Index 2016-03-31 2059.74                    2068.869
+    ##  4 SPX Index 2016-04-29 2065.30                    2076.904
+    ##  5 SPX Index 2016-05-31 2096.96                    2114.097
+    ##  6 SPX Index 2016-06-30 2098.86                    2119.557
+    ##  7 SPX Index 2016-07-29 2173.60                    2197.635
+    ##  8 SPX Index 2016-08-31 2170.95                    2200.734
+    ##  9 SPX Index 2016-09-30 2168.27                    2201.125
+    ## 10 SPX Index 2016-10-31 2126.15                    2161.000
+    ## # ... with 14 more rows
 
 ``` r
 #single security, single field bdh
@@ -486,31 +554,31 @@ microbenchmark::microbenchmark(direct_way,tq_way(),my_way(),times=1)
 
     ## Unit: microseconds
     ##        expr        min         lq       mean     median         uq
-    ##  direct_way      3.322      3.322      3.322      3.322      3.322
-    ##    tq_way() 386101.035 386101.035 386101.035 386101.035 386101.035
-    ##    my_way() 468472.500 468472.500 468472.500 468472.500 468472.500
+    ##  direct_way      1.643      1.643      1.643      1.643      1.643
+    ##    tq_way() 550661.801 550661.801 550661.801 550661.801 550661.801
+    ##    my_way() 641966.434 641966.434 641966.434 641966.434 641966.434
     ##         max neval
-    ##       3.322     1
-    ##  386101.035     1
-    ##  468472.500     1
+    ##       1.643     1
+    ##  550661.801     1
+    ##  641966.434     1
 
 ``` r
 system.time(direct_way())
 ```
 
     ##    user  system elapsed 
-    ##    0.01    0.00    0.34
+    ##    0.03    0.00    0.31
 
 ``` r
 system.time(tq_way())
 ```
 
     ##    user  system elapsed 
-    ##    0.06    0.00    0.42
+    ##    0.08    0.00    0.59
 
 ``` r
 system.time(my_way())
 ```
 
     ##    user  system elapsed 
-    ##    0.19    0.01    0.47
+    ##    0.29    0.00    0.61

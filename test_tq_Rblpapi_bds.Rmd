@@ -27,7 +27,8 @@ library(Rblpapi)
 ## Not run:
 ## simple query
 blpConnect()
-bds("GOOG US Equity", "TOP_20_HOLDERS_PUBLIC_FILINGS")
+output_bds<-bds("GOOG US Equity", "TOP_20_HOLDERS_PUBLIC_FILINGS")
+output_bds
 ```
 
 #using tq_get
@@ -69,3 +70,30 @@ my_bloomberg_data <-  tq_get(x = 'GOOG US Equity',
 
 ```
 also doesn't work.
+
+#supply parameters sought, though not needed
+```{r}
+my_bloomberg_data <-  tq_get(x= 'GOOG US Equity',
+                             securities='not needed',
+                             fields = 'not needed',
+                             get = "rblpapi",
+                             rblpapi_fun = "bds",
+                             security='GOOG US Equity',
+                             field = c("TOP_20_HOLDERS_PUBLIC_FILINGS")
+           )
+
+
+```
+
+```{r}
+my_bloomberg_data <-  tq_get(x='not needed',
+                             fields = 'not needed',
+                             get = "rblpapi",
+                             rblpapi_fun = "bds",
+                             security='GOOG US Equity',
+                             field = c("TOP_20_HOLDERS_PUBLIC_FILINGS")
+           )
+
+
+```
+Interesting.  Note that `securities` is shown as an unused argument though it does not appear in the parameter list.  It is a holdover from the last call, somehow.

@@ -1,4 +1,4 @@
-test\_tq\_Rblpapi
+test\_tq\_Rblpapi\_bds
 ================
 Art Steinmetz
 
@@ -18,32 +18,26 @@ devtools::install_github("business-science/tidyquant")
 library(tidyverse)
 ```
 
-    ## -- Attaching packages ---------------------------------- tidyverse 1.2.1 --
+    ## Warning: package 'tidyverse' was built under R version 3.4.2
 
-    ## v tibble  1.3.4     v purrr   0.2.4
+    ## -- Attaching packages ---------------------------------------------------------------------------- tidyverse 1.2.1 --
+
+    ## v ggplot2 2.2.1     v purrr   0.2.4
+    ## v tibble  1.3.4     v dplyr   0.7.4
     ## v tidyr   0.7.2     v stringr 1.2.0
     ## v readr   1.1.1     v forcats 0.2.0
 
-    ## Warning: package 'tibble' was built under R version 3.4.1
+    ## Warning: package 'tibble' was built under R version 3.4.2
 
     ## Warning: package 'tidyr' was built under R version 3.4.2
 
     ## Warning: package 'purrr' was built under R version 3.4.2
 
-    ## -- Conflicts ------------------------------------- tidyverse_conflicts() --
-    ## x dplyr::arrange()   masks plyr::arrange()
-    ## x purrr::compact()   masks plyr::compact()
-    ## x dplyr::count()     masks plyr::count()
-    ## x dplyr::failwith()  masks plyr::failwith()
-    ## x dplyr::filter()    masks stats::filter()
-    ## x dplyr::first()     masks xts::first()
-    ## x dplyr::id()        masks plyr::id()
-    ## x dplyr::lag()       masks stats::lag()
-    ## x dplyr::last()      masks xts::last()
-    ## x dplyr::mutate()    masks plyr::mutate()
-    ## x dplyr::rename()    masks plyr::rename()
-    ## x dplyr::summarise() masks plyr::summarise()
-    ## x dplyr::summarize() masks plyr::summarize()
+    ## Warning: package 'dplyr' was built under R version 3.4.2
+
+    ## -- Conflicts ------------------------------------------------------------------------------- tidyverse_conflicts() --
+    ## x dplyr::filter() masks stats::filter()
+    ## x dplyr::lag()    masks stats::lag()
 
 ``` r
 library(stringr)
@@ -55,10 +49,6 @@ library(lubridate)
 
     ## 
     ## Attaching package: 'lubridate'
-
-    ## The following object is masked from 'package:plyr':
-    ## 
-    ##     here
 
     ## The following object is masked from 'package:base':
     ## 
@@ -76,32 +66,53 @@ library(Rblpapi)
 library(tidyquant)
 ```
 
+    ## Loading required package: PerformanceAnalytics
+
+    ## Loading required package: xts
+
+    ## Loading required package: zoo
+
+    ## 
+    ## Attaching package: 'zoo'
+
+    ## The following objects are masked from 'package:base':
+    ## 
+    ##     as.Date, as.Date.numeric
+
+    ## 
+    ## Attaching package: 'xts'
+
+    ## The following objects are masked from 'package:dplyr':
+    ## 
+    ##     first, last
+
+    ## 
+    ## Attaching package: 'PerformanceAnalytics'
+
+    ## The following object is masked from 'package:graphics':
+    ## 
+    ##     legend
+
     ## Loading required package: quantmod
 
     ## Warning: package 'quantmod' was built under R version 3.4.2
 
     ## Loading required package: TTR
 
-    ## Warning: package 'TTR' was built under R version 3.4.1
+    ## Warning: package 'TTR' was built under R version 3.4.2
 
     ## Version 0.4-0 included new data defaults. See ?getSymbols.
 
     ## 
     ## Attaching package: 'tidyquant'
 
-    ## The following object is masked from 'package:tibble':
-    ## 
-    ##     as_tibble
-
     ## The following object is masked from 'package:dplyr':
     ## 
     ##     as_tibble
 
-``` r
-library(reprex)
-```
-
-    ## Warning: package 'reprex' was built under R version 3.4.2
+    ## The following object is masked from 'package:tibble':
+    ## 
+    ##     as_tibble
 
 ``` r
 library(Rblpapi)
@@ -113,11 +124,40 @@ secs<-c("DODFX US Equity",
         "LBUSTRUU Index")
 ```
 
+show output from Rblpapi::bdp()
+===============================
+
+NA output for index tickers is correct.
+
+``` r
+blpConnect()
+my_fields<- c("FUND_MGR_STATED_FEE",
+              "FUND_EXPENSE_RATIO",
+              "FUND_TOTAL_ASSETS")
+
+my_bloomberg_data <- secs %>% bdp(
+           fields  = my_fields
+           )
+
+my_bloomberg_data
+```
+
+    ##                 FUND_MGR_STATED_FEE FUND_EXPENSE_RATIO FUND_TOTAL_ASSETS
+    ## DODFX US Equity                 0.6               0.64         65455.613
+    ## DODGX US Equity                 0.5               0.52         68443.773
+    ## DODIX US Equity                 0.4               0.43         52413.539
+    ## DODWX US Equity                 0.6               0.63          9255.162
+    ## SPX Index                        NA                 NA                NA
+    ## LBUSTRUU Index                   NA                 NA                NA
+
+``` r
+saveRDS(my_bloomberg_data,file='output_bdp.rds')
+```
+
 initial test
 ============
 
 single security, single data point
-==================================
 
 ``` r
 # Get BBG Descriptive Data
@@ -145,11 +185,7 @@ my_bloomberg_data <- secs %>%
            rblpapi_fun = "bdp",
            fields      = c("FUND_MGR_STATED_FEE")
            )
-```
 
-    ## Warning: package 'bindrcpp' was built under R version 3.4.1
-
-``` r
 my_bloomberg_data
 ```
 
@@ -208,12 +244,12 @@ my_bloomberg_data
     ## # A tibble: 6 x 4
     ##            symbol CURRENT_TRR_1YR PEER_RANKING FUND_BENCHMARK_PRIM
     ##             <chr>           <dbl>        <int>               <chr>
-    ## 1 DODFX US Equity       23.997070           63                MXEA
-    ## 2 DODGX US Equity       15.851300           48                 SPX
-    ## 3 DODIX US Equity        4.071422           75            LBUSTRUU
-    ## 4 DODWX US Equity       19.661250           33                M1WO
-    ## 5       SPX Index       21.201810           NA                    
-    ## 6  LBUSTRUU Index        2.774545           NA
+    ## 1 DODFX US Equity       25.455420           65                MXEA
+    ## 2 DODGX US Equity       15.665860           52                 SPX
+    ## 3 DODIX US Equity        4.606240           77            LBUSTRUU
+    ## 4 DODWX US Equity       20.471380           35                M1WO
+    ## 5       SPX Index       20.590790           NA                    
+    ## 6  LBUSTRUU Index        3.311082           NA
 
 ``` r
 my_fields=c("CURRENT_ANN_TRR_3YR","PEER_RANKING","FUND_BENCHMARK_PRIM")
@@ -231,12 +267,12 @@ my_bloomberg_data
     ## # A tibble: 6 x 4
     ##            symbol CURRENT_ANN_TRR_3YR PEER_RANKING FUND_BENCHMARK_PRIM
     ##             <chr>               <dbl>        <int>               <chr>
-    ## 1 DODFX US Equity            3.959139           22                MXEA
-    ## 2 DODGX US Equity            9.517473           85                 SPX
-    ## 3 DODIX US Equity            3.000104           81            LBUSTRUU
-    ## 4 DODWX US Equity            7.277763           74                M1WO
-    ## 5       SPX Index           10.495980           NA                    
-    ## 6  LBUSTRUU Index            2.390614           NA
+    ## 1 DODFX US Equity            4.137208           24                MXEA
+    ## 2 DODGX US Equity            9.401031           86                 SPX
+    ## 3 DODIX US Equity            3.055207           81            LBUSTRUU
+    ## 4 DODWX US Equity            7.299826           73                M1WO
+    ## 5       SPX Index           10.176840           NA                    
+    ## 6  LBUSTRUU Index            2.393554           NA
 
 ``` r
 my_fields=c("CURRENT_ANN_TRR_5YR","PEER_RANKING","FUND_BENCHMARK_PRIM")
@@ -254,12 +290,12 @@ my_bloomberg_data
     ## # A tibble: 6 x 4
     ##            symbol CURRENT_ANN_TRR_5YR PEER_RANKING FUND_BENCHMARK_PRIM
     ##             <chr>               <dbl>        <int>               <chr>
-    ## 1 DODFX US Equity           10.002940           66                MXEA
-    ## 2 DODGX US Equity           16.731530           97                 SPX
-    ## 3 DODIX US Equity            3.019197           86            LBUSTRUU
-    ## 4 DODWX US Equity           14.028000           95                M1WO
-    ## 5       SPX Index           16.117900           NA                    
-    ## 6  LBUSTRUU Index            2.008912           NA
+    ## 1 DODFX US Equity            9.777702           66                MXEA
+    ## 2 DODGX US Equity           16.324170           98                 SPX
+    ## 3 DODIX US Equity            3.063700           86            LBUSTRUU
+    ## 4 DODWX US Equity           13.774270           95                M1WO
+    ## 5       SPX Index           15.584350           NA                    
+    ## 6  LBUSTRUU Index            2.040308           NA
 
 deliberate errors
 =================
@@ -287,7 +323,7 @@ my_bloomberg_data
 
 empty table. No error message. Suggests verbose=TRUE.
 
-now a bad field.
+now try a bad field.
 
 ``` r
 my_fields=c("blah blah")
@@ -358,10 +394,10 @@ my_bloomberg_data <- bad_sec %>%
     ##             eidData[] = {
     ##             }
     ##             securityError = {
-    ##                 source = "118::bbdbd5"
+    ##                 source = "809::sbbdbd8"
     ##                 code = 3
     ##                 category = "BAD_SEC"
-    ##                 message = "Unknown/Invalid Security  [nid:118] "
+    ##                 message = "Unknown/Invalid Security  [nid:809] "
     ##                 subcategory = "INVALID_SECURITY"
     ##             }
     ##             fieldExceptions[] = {
@@ -409,7 +445,7 @@ my_bloomberg_data <- secs[1:4] %>%
     ##             }
     ##             sequenceNumber = 0
     ##             fieldData = {
-    ##                 CURRENT_ANN_TRR_5YR = 10.002940
+    ##                 CURRENT_ANN_TRR_5YR = 9.777702
     ##                 PEER_RANKING = 66
     ##                 FUND_BENCHMARK_PRIM = "MXEA"
     ##             }
@@ -426,8 +462,8 @@ my_bloomberg_data <- secs[1:4] %>%
     ##             }
     ##             sequenceNumber = 0
     ##             fieldData = {
-    ##                 CURRENT_ANN_TRR_5YR = 16.731530
-    ##                 PEER_RANKING = 97
+    ##                 CURRENT_ANN_TRR_5YR = 16.324170
+    ##                 PEER_RANKING = 98
     ##                 FUND_BENCHMARK_PRIM = "SPX"
     ##             }
     ##         }
@@ -443,7 +479,7 @@ my_bloomberg_data <- secs[1:4] %>%
     ##             }
     ##             sequenceNumber = 0
     ##             fieldData = {
-    ##                 CURRENT_ANN_TRR_5YR = 3.019197
+    ##                 CURRENT_ANN_TRR_5YR = 3.063700
     ##                 PEER_RANKING = 86
     ##                 FUND_BENCHMARK_PRIM = "LBUSTRUU"
     ##             }
@@ -460,7 +496,7 @@ my_bloomberg_data <- secs[1:4] %>%
     ##             }
     ##             sequenceNumber = 0
     ##             fieldData = {
-    ##                 CURRENT_ANN_TRR_5YR = 14.028000
+    ##                 CURRENT_ANN_TRR_5YR = 13.774270
     ##                 PEER_RANKING = 95
     ##                 FUND_BENCHMARK_PRIM = "M1WO"
     ##             }
@@ -475,9 +511,9 @@ my_bloomberg_data
     ## # A tibble: 4 x 4
     ##            symbol CURRENT_ANN_TRR_5YR PEER_RANKING FUND_BENCHMARK_PRIM
     ##             <chr>               <dbl>        <int>               <chr>
-    ## 1 DODFX US Equity           10.002940           66                MXEA
-    ## 2 DODGX US Equity           16.731530           97                 SPX
-    ## 3 DODIX US Equity            3.019197           86            LBUSTRUU
-    ## 4 DODWX US Equity           14.028000           95                M1WO
+    ## 1 DODFX US Equity            9.777702           66                MXEA
+    ## 2 DODGX US Equity           16.324170           98                 SPX
+    ## 3 DODIX US Equity            3.063700           86            LBUSTRUU
+    ## 4 DODWX US Equity           13.774270           95                M1WO
 
 Good.
