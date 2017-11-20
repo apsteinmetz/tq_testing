@@ -18,6 +18,8 @@ library(tidyquant)
 library(reprex)
 library(Rblpapi)
 
+paste("Using tidyquant version",packageVersion('tidyquant'))
+
 ```
 
 #initial test
@@ -32,6 +34,11 @@ output_bds
 ```
 
 #using tq_get
+The parameter names for bds() differ slightly from bdp() and bdh().
+<code>securities</code> becomes <code>security</code> and that blows up piping in the ticker symbols.   <code>fields</code> becomes <code>field</code> 
+
+
+#Pipe in first parameter with the ticker
 ```{r}
 my_bloomberg_data <- c('GOOG US Equity') %>%
     tq_get(get         = "rblpapi",
@@ -40,15 +47,16 @@ my_bloomberg_data <- c('GOOG US Equity') %>%
            )
 
 ```
-The parameter names for bds() differ slightly from bdp() and bdh().
-<code>securities</code> becomes <code>security</code> and that blows up piping in the ticker symbols.   <code>fields</code> becomes <code>field</code> 
+'x = 'GOOG US Equity', get = 'Rblpapi': Error in bds(securities = "GOOG US Equity", field = "TOP_20_HOLDERS_PUBLIC_FILINGS"): unused argument (securities = "GOOG US Equity")'
+
+When the parameter is piped in tq_get tries to assign it to `securities` even if the function is `bds', which throws an `unused argument` error.
 
 #bds() with proper parameter names.
 
 Commented out because otherwise execution halts.  Error message shown below.
 
 ```{r}
-#my_bloomberg_data <-  tq_get(security = 'GOOG US Equity',
+# my_bloomberg_data <-  tq_get(security = 'GOOG US Equity',
 #                             get = "rblpapi",
 #                             rblpapi_fun = "bds",
 #                             field = c("TOP_20_HOLDERS_PUBLIC_FILINGS")
@@ -56,10 +64,10 @@ Commented out because otherwise execution halts.  Error message shown below.
 
 
 ```
-Error in tq_get(security = "GOOG US Equity", get = "rblpapi", rblpapi_fun = "bds",  : 
-  argument "x" is missing, with no default
+`Error in tq_get(security = "GOOG US Equity", get = "rblpapi", rblpapi_fun = "bds",  : 
+  argument "x" is missing, with no default`
   
-doesn't work.
+#try assigning x.
 ```{r}
 my_bloomberg_data <-  tq_get(x = 'GOOG US Equity',
                              get = "rblpapi",
@@ -69,6 +77,8 @@ my_bloomberg_data <-  tq_get(x = 'GOOG US Equity',
 
 
 ```
+`x = 'GOOG US Equity', get = 'Rblpapi': Error in bds(securities = "GOOG US Equity", field = "TOP_20_HOLDERS_PUBLIC_FILINGS"): unused argument (securities = "GOOG US Equity")`
+
 also doesn't work.
 
 #supply parameters sought, though not needed
@@ -84,7 +94,7 @@ my_bloomberg_data <-  tq_get(x= 'GOOG US Equity',
 
 
 ```
-
+'x = 'GOOG US Equity', get = 'Rblpapi': Error in bds(securities = "GOOG US Equity", securities = "not needed", : unused arguments (securities = "GOOG US Equity", securities = "not needed", fields = "not needed")'
 ```{r}
 my_bloomberg_data <-  tq_get(x='not needed',
                              fields = 'not needed',
@@ -96,4 +106,9 @@ my_bloomberg_data <-  tq_get(x='not needed',
 
 
 ```
+This is the error that I get when I run the chunk above interactively.  It is different from the error I get when I knit the notebook!
+
+`x = 'not needed', get = 'Rblpapi': Error in bds(securities = "not needed", fields = "not needed", security = "GOOG US Equity", : unused arguments (securities = "not needed", fields = "not needed")`
+
+
 Interesting.  Note that `securities` is shown as an unused argument though it does not appear in the parameter list.  It is a holdover from the last call, somehow.
