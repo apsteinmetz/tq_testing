@@ -47,11 +47,17 @@ my_bloomberg_data <- c('GOOG US Equity') %>%
            )
 
 ```
-'x = 'GOOG US Equity', get = 'Rblpapi': Error in bds(securities = "GOOG US Equity", field = "TOP_20_HOLDERS_PUBLIC_FILINGS"): unused argument (securities = "GOOG US Equity")'
 
-When the parameter is piped in tq_get tries to assign it to `securities` even if the function is `bds', which throws an `unused argument` error.
+#try assigning x.
+```{r}
+my_bloomberg_data <-  tq_get(x = 'GOOG US Equity',
+                             get = "rblpapi",
+                             rblpapi_fun = "bds",
+                             field = c("TOP_20_HOLDERS_PUBLIC_FILINGS")
+           )
 
-#bds() with proper parameter names.
+my_bloomberg_data
+```
 
 Commented out because otherwise execution halts.  Error message shown below.
 
@@ -67,48 +73,3 @@ Commented out because otherwise execution halts.  Error message shown below.
 `Error in tq_get(security = "GOOG US Equity", get = "rblpapi", rblpapi_fun = "bds",  : 
   argument "x" is missing, with no default`
   
-#try assigning x.
-```{r}
-my_bloomberg_data <-  tq_get(x = 'GOOG US Equity',
-                             get = "rblpapi",
-                             rblpapi_fun = "bds",
-                             field = c("TOP_20_HOLDERS_PUBLIC_FILINGS")
-           )
-
-
-```
-`x = 'GOOG US Equity', get = 'Rblpapi': Error in bds(securities = "GOOG US Equity", field = "TOP_20_HOLDERS_PUBLIC_FILINGS"): unused argument (securities = "GOOG US Equity")`
-
-also doesn't work.
-
-#supply parameters sought, though not needed
-```{r}
-my_bloomberg_data <-  tq_get(x= 'GOOG US Equity',
-                             securities='not needed',
-                             fields = 'not needed',
-                             get = "rblpapi",
-                             rblpapi_fun = "bds",
-                             security='GOOG US Equity',
-                             field = c("TOP_20_HOLDERS_PUBLIC_FILINGS")
-           )
-
-
-```
-'x = 'GOOG US Equity', get = 'Rblpapi': Error in bds(securities = "GOOG US Equity", securities = "not needed", : unused arguments (securities = "GOOG US Equity", securities = "not needed", fields = "not needed")'
-```{r}
-my_bloomberg_data <-  tq_get(x='not needed',
-                             fields = 'not needed',
-                             get = "rblpapi",
-                             rblpapi_fun = "bds",
-                             security='GOOG US Equity',
-                             field = c("TOP_20_HOLDERS_PUBLIC_FILINGS")
-           )
-
-
-```
-This is the error that I get when I run the chunk above interactively.  It is different from the error I get when I knit the notebook!
-
-`x = 'not needed', get = 'Rblpapi': Error in bds(securities = "not needed", fields = "not needed", security = "GOOG US Equity", : unused arguments (securities = "not needed", fields = "not needed")`
-
-
-Interesting.  Note that `securities` is shown as an unused argument though it does not appear in the parameter list.  It is a holdover from the last call, somehow.
