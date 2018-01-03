@@ -1,0 +1,436 @@
+---
+title: "Fund Family Review"
+output: 
+  html_notebook: 
+    code_folding: hide
+---
+Review performance and flows of entire Dodge and Cox mutual fund family.
+
+```{r, message=FALSE, warning=FALSE}
+library(rvest)
+library(stringr)
+library(xml2)
+library(Rblpapi)
+library(xts)
+library(knitr)
+library(tidyverse)
+library(scales)
+library(reshape2)
+library(PerformanceAnalytics)
+library(ggrepel)
+library(mFilter)
+library(lubridate)
+library(tidyquant)
+
+#source("utilities.r")
+blpConnect()
+```
+
+```{r, message=FALSE, warning=FALSE}
+# Get the tickers of the relevant funds. 
+# 
+# This section will vary depending on the ticker  source. If you scrape the web site of the fund complex, each site will have a different layout. Parsing HTML is a dark art which I accomplish through frustrating trial and error.  It does have the advantage of being self-contained within the R script.
+# 
+# A simpler, though multi-step process is to use the Bloomberg fund screener to export a list of tickers.  In this example let's use the Dodge and Cox Funds.
+# 
+# Type FSRC into the Bloomberg terminal.
+# Type "Investment Advisor" into the screening criteria box.
+# Click "Update."
+# Select "Include/Exclude"
+# Type the name of the desired fund company and choose from the dropdown list and hit return.
+# Click on "Results."
+# Click on "Output" and select "Excel"
+# Excel will load the file. 
+
+#dodgecoxtickers <- read_csv("dodgecox.csv")[-1,] #omit first row as it duplicates header names
+
+load("dodgecoxtickers.rdata")
+#View(dodgecoxtickers)
+#get rid of spaces and special chars in column names
+names(dodgecoxtickers)<-names(dodgecoxtickers)%>%
+  str_replace_all('(\r)?\n| ','')
+```
+
+```{r}
+#Retrieve fund info and performance data
+blpConnect()
+
+yearsAgo=10
+#last day of the month preceeding the last full month yearsAgo
+START_DATE=as.Date(as.yearmon(Sys.Date())-yearsAgo-1/12)-1
+
+secs<-dodgecoxtickers$ticker
+
+# Get BBG Descriptive Data
+fundMgtFee<- bdp(secs,"FUND_MGR_STATED_FEE")
+fundExpense<- bdp(secs,"FUND_EXPENSE_RATIO")
+fundAUM<- bdp(secs,"FUND_TOTAL_ASSETS")
+#lower rank number is worse.  The BBG peer rankings line up pretty close with Morningstar
+fund3yrRank<-bdp(secs,fields="PEER_RANKING",overrides=c("PEER_RANKING_PERIOD"='3Y'))
+fund5yrRank<-bdp(secs,fields="PEER_RANKING",overrides=c("PEER_RANKING_PERIOD"='5Y'))
+fundBenchmark<- bdp(secs,"FUND_BENCHMARK_PRIM")
+secNames<- bdp(secs,"NAME")
+dvdFreqs<- bdp(secs,"DVD_FREQ")
+
+```
+
+```{r, message=FALSE, warning=FALSE}
+
+#---------------------------------------------------
+# create table of funds that includes mgt fee
+Funds<-data_frame(ticker=word(row.names(secNames),1),
+                  Name=secNames[,1],
+                  AUM=fundAUM[,1],
+                  Benchmark=fundBenchmark[,1],
+                  PeerRank3Y=100-fund3yrRank[,1],
+                  PeerRank5Y=100-fund5yrRank[,1],
+                  Fee=fundMgtFee[,1],
+                  Expense=fundExpense[,1],
+                  DvdFreq=dvdFreqs[,1],
+                  Fullticker=row.names(secNames)
+)
+# clean up names
+#we don't distinguish share classes in this analysis so strip from names
+shareClasses<-"(-A|-B|-C|-I|-R|-IS|-IV|-INV|-INST|-INS)$"
+Funds$Name<-Funds$Name%>%str_replace(shareClasses,"")%>%str_to_title()
+#abbreviate company name using REGEX
+Funds$Name<- Funds$Name %>% str_replace('Dodge ?&? ?Cox','D&C')
+Funds$Name<- Funds$Name %>% str_replace(' Fd| Fund','')
+Funds$Name<- Funds$Name %>% str_replace('-',' ')
+Funds$Name<- Funds$Name %>% str_replace('Aea|Ae','EUR')
+Funds<-Funds %>% mutate(ShortName=str_replace(Name,"D&C ",""))
+#sort by AUM
+Funds<-Funds[order(Funds$AUM,decreasing = T),]
+#show funds with no benchmark. Add manually, if desired
+#Funds<-edit(Funds)
+#nrow(Funds)
+#OR
+load(file='dc_bm.rdata')
+Funds<-Funds %>% select(-Benchmark) %>% left_join(DC_BM,by='ticker')
+```
+
+```{r}
+secs<-as.character(Funds$Fullticker)
+
+#create list of index tickers
+ndxTicks<-Funds%>%filter(Benchmark!="")%>%.$Benchmark%>%paste("INDEX")%>%unique()
+#make sure we can get return data for at least 3 years. If not delete the ticker so we know what to replace
+testbmk<-bdp(ndxTicks,fields="CURRENT_ANN_TRR_3YR")
+temp<-testbmk%>%mutate(bmk=rownames(testbmk))%>%
+  filter(is.na(CURRENT_ANN_TRR_3YR))%>%
+  .$bmk%>%str_replace(" INDEX","")
+Funds$Benchmark[Funds$Benchmark%in%temp]<-""
+Funds$Benchmark<-as.character(Funds$Benchmark)
+
+#add 3-mo T-Bills for risk-free rate calculations
+ndxTicks<-unique(c(ndxTicks,"LD12TRUU INDEX")) #don't add if it's already there
+
+```
+What funds will we be looking at?
+```{r}
+kable(Funds,digits=2)
+```
+
+```{r}
+# get return and AUM data from BBG
+# CAUTION: The order of the returned series may not be the same as order of the inputs
+# CAUTION: There is no guarantee that the all securities will have values for the same dates.
+BDH_OPTIONS = c("periodicitySelection"="MONTHLY")
+fields=c('DAY_TO_DAY_TOT_RETURN_GROSS_DVDS',"LAST_PRICE",'FUND_TOTAL_ASSETS')
+f_raw  <-tidy_bdh(secs,
+              fields=fields, 
+              start.date = START_DATE,
+              end.date=Sys.Date(),
+              options=BDH_OPTIONS)
+
+#now get the returns of all possible indices.
+if (length(ndxTicks)>0) {
+  n_raw  <-tidy_bdh(ndxTicks,
+                fields='DAY_TO_DAY_TOT_RETURN_GROSS_DVDS', 
+                start.date = START_DATE,
+                end.date=Sys.Date(),
+                options=BDH_OPTIONS)
+}
+```
+
+```{r, message=FALSE, warning=FALSE}
+#clean things up a bit
+fund_data<-f_raw %>% 
+  rename(return=DAY_TO_DAY_TOT_RETURN_GROSS_DVDS,
+         price=LAST_PRICE,
+         AUM=FUND_TOTAL_ASSETS)
+fund_data<-fund_data %>% mutate(return=return/100)
+
+n<-n_raw %>% 
+  rename(return=DAY_TO_DAY_TOT_RETURN_GROSS_DVDS)
+ndxRet<-n %>% mutate(return=return/100)
+
+#convert periodic return numbers to an index so we and sample at an arbitrary frequency
+fund_data<-fund_data%>%mutate(wealth=cumprod(1+return))
+
+#change the ticker names to meaningful names
+fund_data<-Funds %>% 
+  select(ticker,Name) %>% 
+  left_join(fund_data) %>% 
+  group_by(Name)
+
+```
+#Family Assets Under Management
+
+What does mutual fund AUM look like?  Where there are gaps in the AUM data we interpolate.
+```{r, warning=FALSE}
+#interpolate AUM
+fund_data<-fund_data %>% 
+  group_by(Name) %>% 
+  mutate(AUM=na.approx(AUM,na.rm=FALSE))
+
+gg<-fund_data %>% ggplot(aes(x=date,y=AUM,fill=Name))
+gg<- gg +geom_col(width = 40)
+gg<- gg +ggtitle('Dodge and Cox Mutual Fund AUM')+xlab("Date")+ylab('Aum (mm)')
+gg<- gg+  scale_y_continuous(labels=comma)
+#gg<-gg+scale_fill_manual(values = c("orange"),guide=FALSE)
+gg
+
+```
+
+#Family Flows
+Next we can impute flows from the change in AUM net of return.  How do cumulative flows look?
+```{r, message=FALSE, warning=FALSE}
+#impute flows
+fund_data<-fund_data %>% 
+  mutate(flows= na.fill(AUM-lag(AUM)*(1+return),0))
+
+#create cumulative
+flows<-fund_data %>% 
+  mutate(cumflows=cumsum(flows)) %>% 
+  select(date,Name,cumflows) %>% 
+  spread(Name,cumflows)
+
+flows$Total<-flows %>% 
+  select(-date) %>% 
+  apply(1,sum,na.rm=T)
+
+gg<-  flows %>% 
+  ggplot(aes(x=date, y=Total,fill="orange"))
+gg<-gg<- gg +geom_col(width = 40)
+gg<- gg + geom_abline(slope=0,intercept=0)
+gg<- gg + ggtitle('Dodge and Cox Mutual Fund Cumulative Flows')+xlab("Date")+ylab('Net Flow (mm)')
+gg<-gg+scale_fill_manual(values = c("orange"),guide=FALSE)
+gg
+```
+#Look at annual flows.
+```{r}
+annl_flow<-fund_data %>% 
+  mutate(year=year(date)) %>% 
+  group_by(year) %>% 
+  summarise(NetFlow=sum(flows))
+
+gg<-  annl_flow %>% ggplot(aes(x=year, y=NetFlow,fill='orange')) +geom_col()
+gg<- gg + geom_abline(slope=0,intercept=0)
+gg<- gg + ggtitle('Dodge and Cox Mutual Fund Annual Flows')+xlab("Date")+ylab('Net Flow (mm)')
+gg<-gg+scale_fill_manual(values = c("orange"),guide=FALSE)
+gg
+
+```
+Dodge and Cox has been struggling with a tepid, varying flows marked by the banner year of 2014, when International Stock and Income Fund took off.
+
+#Look at individual funds.  Just show the large ones.
+```{r, message=FALSE, warning=FALSE}
+#impute flows
+fund_data<-fund_data %>% 
+  mutate(flows= na.fill(AUM-lag(AUM)*(1+return),0))
+#Plot
+big_funds<-Funds %>% top_n(5,wt=AUM)
+
+fund_data %>% ungroup() %>% 
+  semi_join(big_funds,by='ticker') %>% 
+  group_by(ticker) %>% 
+  mutate(cumflows=cumsum(flows)) %>% 
+  ggplot(aes(x=date,y=cumflows,color=Name))+ geom_line()+geom_hline(yintercept = 1,linetype=1)
+
+```
+What are the top flow gainers and losers over the last five years?  Or, what have you done for me lately?
+
+```{r, message=FALSE, warning=FALSE}
+yearsAgo=5
+f5<-fund_data %>% 
+  filter(date<Sys.Date()-365*yearsAgo) %>% 
+  group_by(Name) %>% 
+  summarise(net_flow=sum(flows)) %>% 
+  arrange(desc(net_flow))
+
+f5$Name<-factor(f5$Name,levels = f5$Name[order(f5$net_flow,decreasing = F)])
+gg<-ggplot(f5,aes(x=Name,y=net_flow))+geom_col()
+gg<- gg +ggtitle('Dodge and Cox 5-Year Flow Top Winners and losers')+ylab('Net 5-Year Flow (mm)')+xlab('Fund')+coord_flip()
+gg
+```
+
+#Focus on the Biggest Fund
+
+Interestingly, their biggest fund, "Stock," has been in substantial outflows. The fund is 4-Star, "Gold", top decile performance over three years and the management team is long tenured.  How does it look over time?
+
+```{r}
+ticker1<-'DODGX'
+# use a Hodrick-Prescott filter to smooth the monthly data
+gg<-fund_data %>% 
+  filter(ticker==ticker1) %>% 
+  ggplot(aes(x=date,y=hpfilter(flows,freq=10,type = 'lambda')[2]$trend))
+gg<-gg+geom_bar(stat = 'identity',fill='orange')
+gg<-gg+geom_abline(slope=0,intercept=0)
+gg<- gg +ggtitle('Dodge and Cox Stock Fund Monthly Flows')+xlab("Date")+ylab('Net Flow (mm, smoothed)')
+gg
+
+```
+Steady drip, drip drip.
+
+But how is performance?
+```{r}
+filter(Funds,ticker==ticker1)%>%select(starts_with('Peer'))
+```
+
+This is a high performing fund. Why might it be losing assets?
+```{r}
+# select fund benchmark and rebase.
+fund<-ticker1
+bench<-filter(Funds,ticker==fund)$Benchmark
+fund_name<-filter(Funds,ticker==fund)$Name
+f1<-fund_data %>% filter(ticker==fund)
+b1<-ndxRet %>% filter(ticker==bench)
+fb1<-bind_rows(b1,f1) %>% 
+  group_by(ticker) %>% 
+  mutate(cumret=cumprod(1+return))
+
+gg<-ggplot(fb1,aes(x=date,y=cumret,color=ticker))+geom_line()
+gg<-gg+ scale_colour_manual(values = c("orange", "black"))
+gg<- gg +ggtitle(paste(fund,'vs.',bench))+xlab("Date")+ylab('Value of $1')
+gg
+
+```
+
+To be fair, this is a value fund. It has done well vs. other value funds, if not the S&P index, as the peer rank above shows.  Sadly, "so what" is the rejoinder.  Shareholders are voting with their wallets.
+
+#Peer Group Rankings
+
+Now let's look at the broader complex.  Bloomberg has  it's own peer group rankings.  They are not going to be the identical to Morningstar or Lipper but I have found they line up pretty closely.  There may be some categories that don't line up so compare before assuming for any specific fund.
+
+First look at the distribution of quartile ranks by number of funds.
+```{r, warning=FALSE}
+#create quartile ranks
+qr<-data_frame(ticker=Funds$ticker,
+               AUM=Funds$AUM,
+               ThreeYr=as.factor(trunc(Funds$PeerRank3Y/100*4+1)),
+               FiveYr=as.factor(trunc(Funds$PeerRank5Y/100*4+1)))
+#convert period columns into factors and get rid of funds with missing data
+qr<-melt(qr,id=c('ticker','AUM'),
+         measure.vars=c("ThreeYr","FiveYr"),
+         variable.name = 'Period',value.name = "Quartile")%>%na.omit()
+lb<-labs(title='Fund Family Quartile Rankings',
+         x='Period',
+         caption='Bloomberg defined peer groups')
+
+ggplot(qr,aes(x=Period))+
+  geom_bar(aes(weight=1/nrow(qr)*2,fill=Quartile))+lb+ylab("Fraction of Funds")+
+  scale_y_continuous(labels=comma)+
+  scale_fill_brewer(palette = "RdYlGn",direction=-1)
+```
+Now look at the distribution weighted by AUM
+
+```{r}
+
+ggplot(qr,aes(x=Period))+
+  geom_bar(aes(weight=AUM/sum(AUM)*2,fill=Quartile))+lb+ylab("Fraction of AUM")+
+  scale_y_continuous(labels=comma)+
+  scale_fill_brewer(palette = "RdYlGn",direction=-1)
+
+
+```
+Strong performance all around, with virtually all their AUM in the first quartile on a 5-year basis, even the funds in heavy outflows.
+
+# Performance vs. Benchmarks
+
+Active managers are challenged to beat, not just their peers, but their index benchmarks.  Let's take a couple perspectives on that.    Their performance against the major indices is fantastic for the global funds but their value focus has hurt them on the domestic side, as it has all value managers.
+
+Note that I don't have I don't have EUR denominated benchmarks two of the funds with "EUR" in the name. That means the strong dollar vs. EUR doesn't get reflected in USD benchmark I use (which would make the benchmark look better).  "US Stock - Eur" does have a good benchmark.
+```{r, message=FALSE, warning=FALSE}
+ndxRet<-ndxRet %>% mutate(Name=ticker)
+all_data<-bind_rows(fund_data,ndxRet) %>% group_by(ticker)
+for (f in Funds$ticker){
+  bm<-Funds %>% filter(ticker==f) %>% pull(Benchmark)
+  f_vs_bm<-all_data %>% filter(ticker==f|ticker==bm)
+  start<-f_vs_bm %>% filter(ticker==f) %>% pull(date) %>% first()
+  f_vs_bm<-f_vs_bm %>% filter(date>=start)
+  gg<-chart_cum_returns(f_vs_bm,name='Name')
+  print(gg)
+}
+  
+```
+
+
+Downside protection is a key attribute advisors focus on. 
+
+```{r, message=FALSE, warning=FALSE,results='asis'}
+# MAKE CAPTURE RATIOS 
+# 3 or 5 year
+years_back<-5
+RaRb<-data_frame()
+t_subset <-Funds %>% filter(!is.na(PeerRank5Y)) %>% filter(!grepl("EUR",Name)) %>%  pull(ticker)
+fund_data_subset<-fund_data %>% filter(ticker %in% t_subset) %>% filter(date>Sys.Date()-365*years_back)
+for (f in t_subset){
+  Ra <- fund_data_subset %>% 
+    ungroup() %>% 
+    filter(ticker==f) %>% 
+    transmute(ticker=ticker,date=date,Ra=return) %>% 
+    group_by(ticker) %>% 
+    select(date,ticker,Ra)
+  
+  Rb <- ndxRet %>%
+    ungroup() %>% 
+    filter(ticker== Funds %>% filter(ticker==f) %>% pull(Benchmark)) %>% 
+    transmute(date=date,Benchmark=ticker,Rb=return)
+  
+  #create a riskfree rate time series
+  #1% is close enough
+  Rf <- 0.01/12
+  
+  RaRb<-bind_rows((Ra %>% left_join(Rb,by='date') %>% group_by(ticker)),RaRb)
+  
+}
+
+CR<-RaRb %>% tq_performance(Ra,Rb,performance_fun=UpDownRatios) %>% 
+  mutate(CaptureRatio=UpCapture/DownCapture)
+CR<-Funds %>% select(ticker,ShortName) %>% left_join(CR) %>% rename(Fund=ShortName)
+
+kable(CR,digits=3)
+```
+```{r, message=FALSE, warning=FALSE}
+LIMIT_SCALE=FALSE
+# define shaded regions
+weakZone <- data.frame(x=c(0.5,1.0,1.0,1.5,1.5),y=c(0.5,0.5,1.0,1.0,1.5))
+strongZone <- data.frame(x=c(0.5,0.5,1.0,1.0,1.5),y=c(0.5,1.0,1.0,1.5,1.5))
+# plot using ggplot2
+gg<-ggplot(CR,aes(DownCapture,UpCapture))+geom_point()
+gg<-gg+theme_classic()
+
+# shaded backgrounds
+gg<-gg+annotate("rect",xmin = 0.5,ymin=1,xmax=1,ymax = 1.5,fill='green',alpha=0.5)
+gg<-gg+annotate("rect",xmin = 1,ymin=0.5,xmax=1.5,ymax = 1,fill='red',alpha=0.5)
+gg<-gg+geom_polygon(data=weakZone,aes(x=x,y=y),color='white',fill='red',alpha=0.1)
+gg<-gg+geom_polygon(data=strongZone,aes(x=x,y=y),color='white',fill='green',alpha=0.1)
+
+# lines
+gg<-gg+geom_abline(intercept = 0,slope = 1,color='black',size=1,linetype='dashed')
+gg<-gg+geom_vline(xintercept = 1,color='black',size=1)
+gg<-gg+geom_hline(yintercept = 1,color='black',size=1)
+
+# Text elements. Make sure text labels don't overlap
+gg<-gg + geom_text_repel(label=CR$Fund,size=3)
+gg<-gg+ggtitle('Client Experience: Dodge & Cox')
+gg<-gg+theme(plot.title=element_text(size=20,face='bold'))
+# limit range. funds outside of range not plotted
+if (LIMIT_SCALE) gg<-gg+xlim(c(0.5,1.5))+ylim(c(0.5,1.5))+coord_equal()
+gg<-gg+annotate("text",x=0.7,y=1.4,label=paste('Capture Ratios\n',years_back," Years"),size=5)
+print(gg)
+
+
+```
+
