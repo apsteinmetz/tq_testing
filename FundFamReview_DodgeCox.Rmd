@@ -8,7 +8,7 @@ Dodge & Cox, in this notebook.
 Use tidyquant framework
 
 ```{r, message=FALSE, warning=FALSE}
-devtools::install_github("business-science/tidyquant")
+#devtools::install_github("business-science/tidyquant")
 library(dplyr)
 library(stringr)
 library(Rblpapi)
@@ -20,6 +20,8 @@ library(PerformanceAnalytics)
 library(ggrepel)
 library(mFilter)
 library(tidyquant)
+
+source("utilities.r")
 ```
 
 Get the tickers of the relevant funds. 
@@ -41,7 +43,7 @@ Save as a csv file. "dodgecoxtickers.csv" in this example.
 
 ```{r, message=FALSE, warning=FALSE}
 
-dodgecoxtickers <- read_csv("dodgecoxtickers.csv") #omit first row as it duplicates ```
+dodgecoxtickers <- read_csv("dodgecoxtickers.csv")
 ```
 
 Retrieve fund info and performance data.  Note we get most of the data elements in a single `tq_get/bdp` call.  Since we want `PEER RANKING` fields for both three and five years, we must call them separately since the field name is the same, must the overrides change and I don't know of a way to call multiple exclusive overrides at once.
@@ -88,7 +90,7 @@ Assemble data set of fund snapshots.
 
 Funds<-left_join(Funds1,fund3yrRank,by="symbol") %>% left_join(fund5yrRank,by="symbol")
 # clean up names
-Funds<-Funds %>% rename(Name=NAME,
+Funds<-Funds %>% rename(name=NAME,
                 AUM=FUND_TOTAL_ASSETS,
                 Benchmark=FUND_BENCHMARK_PRIM,
                 Fee=FUND_MGR_STATED_FEE,
@@ -99,12 +101,12 @@ Funds<-Funds %>% rename(Name=NAME,
 Funds<-Funds %>% separate(symbol,into=c("ticker","Domicile","sec_type"),remove=F)
 #we don't distinguish share classes in this analysis so strip from names
 shareClasses<-"(-A|-B|-C|-I|-R|-IS|-IV|-INV|-INST|-INS|-A1|-B2|-Y|-AUC|-E|-AU2)$"
-Funds<-Funds %>% mutate(Name=str_replace(Name,shareClasses,"")%>%str_to_title())
+Funds<-Funds %>% mutate(name=str_replace(name,shareClasses,"")%>%str_to_title())
 
 #Save some space by removing company name from front of names
-#We have to scan the Name field to see all the variations of the company name
+#We have to scan the name field to see all the variations of the company name
 mgrID<-'Dodge & Cox |Dodge Cox-|Dodge&Cox |Dodge & Cox-'
-Funds<-Funds %>% mutate(Name=str_replace(Name,mgrID,'D&C '))
+Funds<-Funds %>% mutate(name=str_replace(name,mgrID,'D&C '))
 #sort by AUM
 Funds<-Funds[order(Funds$AUM,decreasing = T),]
 
@@ -158,12 +160,12 @@ rawDataNdx <-ndxTicks %>%
 Add wealth column and rename
 ```{r}
 ndxRet<-rawDataNdx %>% 
-  rename(Value=PX_LAST,Date=date) %>% 
-  mutate(Return=DAY_TO_DAY_TOT_RETURN_GROSS_DVDS/100) %>% 
-  mutate(Wealth=cumprod(1+Return)) %>% 
+  rename(Value=PX_LAST,date=date) %>% 
+  mutate(return=DAY_TO_DAY_TOT_RETURN_GROSS_DVDS/100) %>% 
+  mutate(Wealth=cumprod(1+return)) %>% 
   separate(symbol,into="ticker",extra="drop") %>% 
-  mutate(Name=ticker) %>% 
-  select(ticker,Name,Date,Value,Return,Wealth)
+  mutate(name=ticker) %>% 
+  select(ticker,name,date,Value,return,Wealth)
 head(ndxRet)
 ```
 
@@ -211,12 +213,12 @@ Start with funds where monthly frequency provides correct total return data to b
 #interpolate AUM where missing
 aumretM<-rawDataM %>%
   group_by(symbol) %>% 
-      mutate(Date=date,
+      mutate(date=date,
             AUM=na.approx(FUND_TOTAL_ASSETS,na.rm=F),
-            Return=DAY_TO_DAY_TOT_RETURN_GROSS_DVDS/100,
+            return=DAY_TO_DAY_TOT_RETURN_GROSS_DVDS/100,
             Wealth=cumprod(1+DAY_TO_DAY_TOT_RETURN_GROSS_DVDS/100)
   ) %>% 
-  select(symbol,Date,AUM,Return,Wealth)
+  select(symbol,date,AUM,return,Wealth)
 ```
 
 Use daily returns for funds where monthly total return data is wrong due to daily accrual.  Convert to monthly.  Skip if no funds have have daily accrual (which is revealed by monthly dividend distributions in fixed income funds.)
@@ -227,31 +229,31 @@ if (nrow(rawDataD)>0){
   #to change AUM to a monthly frequency
   rawAumD<-rawDataD %>% 
     group_by(symbol) %>% 
-    mutate(Date=date,
+    mutate(date=date,
            AUM=na.approx(FUND_TOTAL_ASSETS,na.rm=F)
     ) %>% 
-    select(symbol,Date,AUM)
+    select(symbol,date,AUM)
   
   
-  rawReturnsD<-rawDataD %>% 
+  rawreturnsD<-rawDataD %>% 
     group_by(symbol) %>% 
-    mutate(Date=date,
+    mutate(date=date,
            Wealth=cumprod(1+DAY_TO_DAY_TOT_RETURN_GROSS_DVDS/100)
     ) %>% 
-    select(symbol,Date,Wealth)
+    select(symbol,date,Wealth)
   
   
-#compute monthly returns using tq_transmute and periodReturn from Quantmod package
-  rawReturnsD <- rawReturnsD %>%  
+#compute monthly returns using tq_transmute and periodreturn from Quantmod package
+  rawreturnsD <- rawreturnsD %>%  
     group_by(symbol) %>% 
     tq_transmute(select="Wealth",
-                 mutate_fun=periodReturn,
+                 mutate_fun=periodreturn,
                  period="monthly",
-                 col_rename="Return") %>% 
-    mutate(Wealth=cumprod(1+Return))
+                 col_rename="return") %>% 
+    mutate(Wealth=cumprod(1+return))
   
-  aumretD<- rawReturnsD %>% 
-    left_join(rawAumD,by=c("Date","symbol"))
+  aumretD<- rawreturnsD %>% 
+    left_join(rawAumD,by=c("date","symbol"))
   
   aumret<-bind_rows(aumretD,aumretM)
 } else{
@@ -261,9 +263,9 @@ if (nrow(rawDataD)>0){
 #change symbol to bare ticker and long name
 aumret<-aumret %>% 
   ungroup() %>% 
-  left_join(select(Funds,symbol,ticker,Name),by='symbol') %>% 
-  select(ticker,Name,Date,AUM,Return,Wealth) %>% 
-  group_by(Name)
+  left_join(select(Funds,symbol,ticker,name),by='symbol') %>% 
+  select(ticker,name,date,AUM,return,Wealth) %>% 
+  group_by(name)
 
 head(aumret)
 ```
@@ -272,11 +274,11 @@ Manual cleanup of some bad data.
 #missing terminal AUM for fund SOCGISD
 #replace last full month AUM with static AUM data from bdp() function, rather than bdh()
 #kind of ugly code
-temp<-aumret[aumret$Date==as.Date("2017-10-31"),]
+temp<-aumret[aumret$date==as.Date("2017-10-31"),]
 temp<-temp %>% select(-AUM) %>% 
   left_join(select(Funds,ticker,AUM),by="ticker") %>% 
-  select(ticker,Name,Date,AUM,Return,Wealth)
-aumret[aumret$Date==as.Date("2017-10-31"),]<-temp
+  select(ticker,name,date,AUM,return,Wealth)
+aumret[aumret$date==as.Date("2017-10-31"),]<-temp
 #interpolate again
 aumret<-aumret %>% group_by(ticker) %>% 
       mutate(AUM=na.approx(AUM,na.rm=F)
@@ -288,8 +290,8 @@ Next we can impute flows from the change in AUM net of return.
 ```{r}
 #impute flows from change in AUM net of return
 flows<-aumret %>% 
-  group_by(Name) %>% 
-  mutate(flow=AUM-((1+Return)*lag(AUM))) %>% 
+  group_by(name) %>% 
+  mutate(flow=AUM-((1+return)*lag(AUM))) %>% 
   mutate(flow=na.fill(flow,0)) %>% 
   mutate(cum_flow=cumsum(flow))
 flows
@@ -299,13 +301,15 @@ flows
 What does mutual fund AUM look like?
 ```{r, warning=FALSE}
 gg<-aumret%>%
-  #filter(Date>as.Date("200-01-01")) %>% 
-  ggplot(aes(x=Date,y=AUM,fill=Name))+geom_col(width=40)
+  #filter(date>as.Date("200-01-01")) %>% 
+  ggplot(aes(x=date,y=AUM,fill=name))+geom_col(width=40)
 gg<- gg + ggtitle('Dodge & Cox Mutual Fund AUM')+
-  xlab("Date")+
+  xlab("date")+
   ylab('Aum (mm)')+
-  scale_y_continuous(label=comma)
-#gg<-gg+theme(legend.position = "none")
+  scale_y_continuous(label=comma)+    
+    theme_tq()+
+    scale_color_tq()
+
 gg
 
 ```
@@ -314,11 +318,14 @@ gg
 
 ```{r}
 gg<-flows %>% 
-  filter(Date>as.Date("2009-01-01")) %>% 
-  ggplot(aes(Date,flow,fill=Name))+geom_col()
+  filter(date>as.Date("2009-01-01")) %>% 
+  ggplot(aes(date,flow))+geom_col()
 
-gg<- gg +ggtitle('Imputed Flows')+xlab("Date")+ylab('Net Flow (mm)')+
-    scale_y_continuous(label=comma)
+gg<- gg +ggtitle('Imputed Flows')+xlab("date")+ylab('Net Flow (mm)')+
+    scale_y_continuous(label=comma)+
+    theme_tq()+
+    scale_color_tq()
+
 gg
 ```
 
@@ -327,21 +334,22 @@ gg
 ```{r, warning=FALSE}
 #create cumulative
 cum_flows<-flows %>% 
-  select(Date,Name,cum_flow) %>% 
-  spread(Name,cum_flow) %>% 
+  select(date,name,cum_flow) %>% 
+  spread(name,cum_flow) %>% 
   {.}
 
 cum_flows$Total<-cum_flows %>% 
-  select(-Date) %>% 
+  select(-date) %>% 
   apply(1,sum,na.rm=T)
 
 gg<-  cum_flows %>% 
-  ggplot(aes(x=Date, y=Total,fill="orange"))
+  ggplot(aes(x=date, y=Total,fill="orange"))
 gg<-gg<- gg +geom_col(width = 40)
 gg<- gg + geom_abline(slope=0,intercept=0)
-gg<- gg + ggtitle('Dodge and Cox Mutual Fund Cumulative Flows')+xlab("Date")+ylab('Net Flow (mm)')
+gg<- gg + ggtitle('Dodge and Cox Mutual Fund Cumulative Flows')+xlab("date")+ylab('Net Flow (mm)')
 gg<-gg+scale_fill_manual(values = c("orange"),guide=FALSE)+
-    scale_y_continuous(label=comma)
+    theme_tq()
+
 
 gg
 ```
@@ -349,15 +357,16 @@ gg
 #Look at annual flows.
 ```{r}
 annl_flow<-flows %>% 
-  mutate(year=year(Date)) %>% 
+  mutate(year=year(date)) %>% 
   group_by(year) %>% 
   summarise(NetFlow=sum(flow))
 
 gg<-  annl_flow %>% ggplot(aes(x=year, y=NetFlow,fill='orange')) +geom_col()
 gg<- gg + geom_abline(slope=0,intercept=0)
-gg<- gg + ggtitle('Dodge and Cox Mutual Fund Annual Flows')+xlab("Date")+ylab('Net Flow (mm)')
+gg<- gg + ggtitle('Dodge and Cox Mutual Fund Annual Flows')+xlab("date")+ylab('Net Flow (mm)')
 gg<-gg+scale_fill_manual(values = c("orange"),guide=FALSE)+
-    scale_y_continuous(label=comma)
+    scale_y_continuous(label=comma)+
+    theme_tq()
 gg
 
 ```
@@ -368,43 +377,51 @@ Dodge and Cox has been struggling with a tepid, varying flows marked by the bann
 
 flows %>% ungroup() %>% 
   group_by(ticker) %>% 
-  ggplot(aes(x=Date,y=cum_flow,color=Name))+ geom_line()+
+  ggplot(aes(x=date,y=cum_flow,color=name))+ geom_line()+
   geom_hline(yintercept = 1,linetype=1)+
   scale_y_continuous(label=comma)+
-  labs(y="Cumulative Net Flow (mm)")
+  labs(y="Cumulative Net Flow (mm)")+
+    theme_tq()+
+    scale_color_tq()+
+    geom_line(size=2)
+
 
 ```
 
 What are the top flow gainers and losers since the financial crisis of 2008?
 
 ```{r, message=FALSE, warning=FALSE}
-sum_flows<-flows %>% group_by(Name) %>% summarize(cum_flow=sum(flow)) 
+sum_flows<-flows %>% group_by(name) %>% summarize(cum_flow=sum(flow)) 
 
-sum_flows$Name<-factor(sum_flows$Name,
-                       levels = sum_flows$Name[order(sum_flows$cum_flow,decreasing = F)])
-gg<-ggplot(sum_flows,aes(x=Name,y=cum_flow))+geom_col(fill="orange")
+sum_flows$name<-factor(sum_flows$name,
+                       levels = sum_flows$name[order(sum_flows$cum_flow,decreasing = F)])
+gg<-ggplot(sum_flows,aes(x=name,y=cum_flow))+geom_col(fill="orange")
 gg<- gg +ggtitle('Dodge & Cox Flow Top Winners and losers')+
   ylab('Net 10-Year Flow (mm)')+
   xlab('Fund')+
   coord_flip()+
-  scale_y_continuous(label=comma)
+  scale_y_continuous(label=comma)+    
+    theme_tq()
+
 gg
 ```
 How about the last five years?
 ```{r, message=FALSE, warning=FALSE}
 sum_flows<-flows %>% 
-  filter(Date<Sys.Date()-(365.25*5)) %>% 
-  group_by(Name) %>% 
+  filter(date<Sys.Date()-(365.25*5)) %>% 
+  group_by(name) %>% 
   summarize(cum_flow=sum(flow)) 
 
-sum_flows$Name<-factor(sum_flows$Name,
-                       levels = sum_flows$Name[order(sum_flows$cum_flow,decreasing = F)])
-gg<-ggplot(sum_flows,aes(x=Name,y=cum_flow))+geom_col(fill="orange")
+sum_flows$name<-factor(sum_flows$name,
+                       levels = sum_flows$name[order(sum_flows$cum_flow,decreasing = F)])
+gg<-ggplot(sum_flows,aes(x=name,y=cum_flow))+geom_col(fill="orange")
 gg<- gg +ggtitle('Dodge & Cox Flow Top Winners and losers')+
   ylab('Net 5-Year Flow (mm)')+
   xlab('Fund')+
   coord_flip()+
-  scale_y_continuous(label=comma)
+  scale_y_continuous(label=comma)+
+    theme_tq()
+
 gg
 ```
 
@@ -412,18 +429,20 @@ gg
 
 Interestingly, their biggest fund, Stock, has been in outflows. The fund is 5-Star, top decile performance over three years and the management team is long tenured.  How does it look over time?
 
-```{r}
+```{r, warning=FALSE}
 gg<-flows %>% 
   filter(ticker=='DODGX') %>% 
-  ggplot(aes(x=Date,y=cum_flow))
+  ggplot(aes(x=date,y=cum_flow))
 
-gg<- gg+geom_col(fill='orange') #+geom_smooth()
+gg<- gg+geom_col(fill='orange',width=40) #+geom_smooth()
 #gg<- gg+geom_smooth()
 
 gg<-gg+geom_abline(slope=0,intercept=0)
 gg<- gg +ggtitle('Dodge & Cox Stock Cumulative Flows')+
-  xlab("Date")+ylab('Net Flow (mm)')+
-  scale_y_continuous(label=comma)
+  xlab("date")+ylab('Net Flow (mm)') +
+  #scale_y_continuous(label=comma)+  
+  theme_tq()
+
 gg
 
 ```
@@ -438,40 +457,26 @@ Performance has been  stellar of late vs. peers. How about vs. the benchmark, th
 # select fund benchmark and rebase.
 fund<-'DODGX'
 bench<-filter(Funds,ticker==fund)$Benchmark
-temp<-bind_rows(filter(aumret,ticker==fund),filter(ndxRet,Name==bench))
+temp<-bind_rows(filter(aumret,ticker==fund),filter(ndxRet,name==bench))
 
-gg<-ggplot(temp,aes(x=Date,y=Wealth,color=Name))+geom_line()
-gg<-gg+ scale_colour_manual(values = c("orange", "black"))
-gg<- gg +ggtitle(paste(fund,'vs.',bench))+xlab("Date")+ylab('Value of $1')
+gg<-chart_cum_returns(temp,
+                        name_col='name',
+                        ret_col='return',
+                        date_col='date'
+                        )
+gg<-gg+
+    geom_line(size=2)+
+    theme_tq()+
+    scale_color_tq()+
+    scale_y_continuous(labels=dollar)+
+    labs(x="date",y="Wealth",title="Performance vs. Benchmark")+
+    guides(col = guide_legend(title = NULL))
 gg
 
 ```
 
 Here we see the clue to the outflows. Great relative performance and a bull market are not enough to resist the onslaught of passive investing when the S&P500 is so strong. The fund has a value orientation and value has underperformed growth since the crisis.
 
-SIDEBAR: Compare the tidy-ish code to the commented out xts/zoo code beneath it. Tidy code is much more parsimonious.  Though, to be fair, we are biased to use long-form tidy data because it feeds better into ggplot2.
-```{r}
-tempShort<-temp %>% filter(Date>as.Date('2009-02-01'))
-#rebase wealth index
-tempShort<-tempShort %>% mutate(Wealth=cumprod(1+Return))
-
-
-# temp<-merge(fundRet[,fund],ndxRet[,bench])[-1]
-# tempShort<-temp['200902/',]
-# #ggplot2 likes to work with "long" data so turn the date index into a column in the data frame and "melt" it.
-# dates<-as.Date(time(tempShort))
-# tempShort<-as_data_frame(tempShort)
-# tempShort<-cumprod(1+tempShort)
-# tempShort$Date<-dates
-# #transform to long form data arrangement
-# tempShort<-melt(tempShort,id.vars = "Date")
-
-gg<-ggplot(tempShort,aes(x=Date,y=Wealth,color=Name))+geom_line()
-gg<-gg+ scale_colour_manual(values = c("orange", "black"))
-gg<- gg +ggtitle(paste(fund,'vs.',bench))+xlab("Date")+ylab('Value of $1')
-gg
-
-```
 
 #Peer Group Rankings
 
@@ -481,12 +486,12 @@ First look at the distribution of quartile ranks by number of funds. A lower qua
 
 ```{r}
 #create quartile ranks
-qr<-data_frame(Name=Funds$Name,
+qr<-data_frame(name=Funds$name,
                AUM=Funds$AUM,
                ThreeYr=as.factor(trunc(Funds$peer_rank_3Y/100*4+1)),
                FiveYr=as.factor(trunc(Funds$peer_rank_5Y/100*4+1)))
 #convert period columns into factors and get rid of funds with missing data
-qr<-melt(qr,id=c('Name','AUM'),
+qr<-melt(qr,id=c('name','AUM'),
          measure.vars=c("ThreeYr","FiveYr"),
          variable.name = 'Period',value.name = "Quartile")%>%na.omit()
 lb<-labs(title='Fund Family Quartile Rankings',
@@ -514,20 +519,27 @@ Strong performance all around, with all their AUM in the top half on a 5-year ba
 
 # Performance vs. Benchmarks
 
-Active managers are challenged to beat, not just their peers, but their index benchmarks.  Let's take a couple perspectives on that.  
+Active managers are challenged to beat, not just their peers, but their index benchmarks.  Let's take a couple perspectives on that.  First look at all the funds in our sample vs. their benchmarks.  We we repeat the chart for D&C Stock already seen above.
 ```{r, message=FALSE, warning=FALSE}
 #source("utilities.r")
 all_data<-bind_rows(flows,ndxRet) %>% group_by(ticker)
 for (f in Funds$ticker){
   bm<-Funds %>% filter(ticker==f) %>% pull(Benchmark)
   f_vs_bm<-all_data %>% filter(ticker==f|ticker==bm)
-  start<-f_vs_bm %>% filter(ticker==f) %>% pull(Date) %>% first()
-  f_vs_bm<-f_vs_bm %>% filter(Date>=start)
+  start<-f_vs_bm %>% filter(ticker==f) %>% pull(date) %>% first()
+  f_vs_bm<-f_vs_bm %>% filter(date>=start)
   gg<-chart_cum_returns(f_vs_bm,
-                        name_col='Name',
-                        ret_col='Return',
-                        date_col='Date'
+                        name_col='name',
+                        ret_col='return',
+                        date_col='date'
                         )
+  gg<-gg+
+    geom_line(size=2)+
+    theme_tq()+
+    scale_color_tq()+
+    scale_y_continuous(labels=dollar)+
+    labs(x="date",y="Wealth",title="Performance vs. Benchmark")+
+    guides(col = guide_legend(title = NULL))
   print(gg)
 }
   
