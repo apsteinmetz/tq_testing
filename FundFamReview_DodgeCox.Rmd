@@ -269,22 +269,6 @@ aumret<-aumret %>%
 
 head(aumret)
 ```
-Manual cleanup of some bad data.
-```{r}
-#missing terminal AUM for fund SOCGISD
-#replace last full month AUM with static AUM data from bdp() function, rather than bdh()
-#kind of ugly code
-temp<-aumret[aumret$date==as.Date("2017-10-31"),]
-temp<-temp %>% select(-AUM) %>% 
-  left_join(select(Funds,ticker,AUM),by="ticker") %>% 
-  select(ticker,name,date,AUM,return,Wealth)
-aumret[aumret$date==as.Date("2017-10-31"),]<-temp
-#interpolate again
-aumret<-aumret %>% group_by(ticker) %>% 
-      mutate(AUM=na.approx(AUM,na.rm=F)
-             )
-
-```
 
 Next we can impute flows from the change in AUM net of return.
 ```{r}
@@ -294,14 +278,14 @@ flows<-aumret %>%
   mutate(flow=AUM-((1+return)*lag(AUM))) %>% 
   mutate(flow=na.fill(flow,0)) %>% 
   mutate(cum_flow=cumsum(flow))
+rm(aumret)
 flows
 ```
 #Family Assets Under Management
 
 What does mutual fund AUM look like?
 ```{r, warning=FALSE}
-gg<-aumret%>%
-  #filter(date>as.Date("200-01-01")) %>% 
+gg<-flows %>%
   ggplot(aes(x=date,y=AUM,fill=name))+geom_col(width=40)
 gg<- gg + ggtitle('Dodge & Cox Mutual Fund AUM')+
   xlab("date")+
@@ -396,7 +380,7 @@ sum_flows<-flows %>% group_by(name) %>% summarize(cum_flow=sum(flow))
 sum_flows$name<-factor(sum_flows$name,
                        levels = sum_flows$name[order(sum_flows$cum_flow,decreasing = F)])
 gg<-ggplot(sum_flows,aes(x=name,y=cum_flow))+geom_col(fill="orange")
-gg<- gg +ggtitle('Dodge & Cox Flow Top Winners and losers')+
+gg<- gg +ggtitle('Dodge & Cox Flow Top Winners and Losers')+
   ylab('Net 10-Year Flow (mm)')+
   xlab('Fund')+
   coord_flip()+
@@ -415,7 +399,7 @@ sum_flows<-flows %>%
 sum_flows$name<-factor(sum_flows$name,
                        levels = sum_flows$name[order(sum_flows$cum_flow,decreasing = F)])
 gg<-ggplot(sum_flows,aes(x=name,y=cum_flow))+geom_col(fill="orange")
-gg<- gg +ggtitle('Dodge & Cox Flow Top Winners and losers')+
+gg<- gg +ggtitle('Dodge & Cox Flow Top Winners and Losers')+
   ylab('Net 5-Year Flow (mm)')+
   xlab('Fund')+
   coord_flip()+
@@ -457,7 +441,7 @@ Performance has been  stellar of late vs. peers. How about vs. the benchmark, th
 # select fund benchmark and rebase.
 fund<-'DODGX'
 bench<-filter(Funds,ticker==fund)$Benchmark
-temp<-bind_rows(filter(aumret,ticker==fund),filter(ndxRet,name==bench))
+temp<-bind_rows(filter(flows,ticker==fund),filter(ndxRet,name==bench))
 
 gg<-chart_cum_returns(temp,
                         name_col='name',
@@ -544,6 +528,30 @@ for (f in Funds$ticker){
 }
   
 ```
+
+It might be nice to turn these charts into a facet plot but adding two series per facet is a little tricky.  Let's try.  We will create a data frame where the fund return and the benchmark return are two columns for each date.  This data frame is not completely tidy.
+```{r, warning=FALSE}
+#make a new frame with fund return and benchmark return in different columns
+comp_ret<-flows %>% rename(fund_name=name,Ra=return,Wa=Wealth) %>% 
+  left_join(select(Funds,ticker,Benchmark)) %>% 
+  left_join(rename(select(ndxRet,date,ticker,return,Wealth),
+                   Wb=Wealth,
+                   Benchmark=ticker)) %>%
+  rename(Rb=return,benchmark=Benchmark) %>% 
+  select(date,ticker,fund_name,Ra,Wa,benchmark,Rb,Wb)
+
+#plot it facet style
+comp_ret %>% ggplot(aes(date,Wa,group=fund_name,color="Fund"))+
+  geom_line()+
+  geom_line(aes(date,Wb,group=fund_name,color="Benchmark"))+
+  guides(col = guide_legend(title = NULL))+
+  scale_y_continuous(labels=dollar)+
+  labs(x="Date",y="Wealth",title="Performance vs. Relevant Benchmark")+
+  theme_tq()+
+  scale_color_tq()+
+  facet_wrap(~fund_name, scale='free')
+```
+Much prettier!
 
 
 Downside protection is a key attribute advisors focus on. 
