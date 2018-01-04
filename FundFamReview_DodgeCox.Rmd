@@ -301,7 +301,10 @@ What does mutual fund AUM look like?
 gg<-aumret%>%
   #filter(Date>as.Date("200-01-01")) %>% 
   ggplot(aes(x=Date,y=AUM,fill=Name))+geom_col(width=40)
-gg<- gg +ggtitle('Dodge & Cox Mutual Fund AUM')+xlab("Date")+ylab('Aum (mm)')
+gg<- gg + ggtitle('Dodge & Cox Mutual Fund AUM')+
+  xlab("Date")+
+  ylab('Aum (mm)')+
+  scale_y_continuous(label=comma)
 #gg<-gg+theme(legend.position = "none")
 gg
 
@@ -314,7 +317,8 @@ gg<-flows %>%
   filter(Date>as.Date("2009-01-01")) %>% 
   ggplot(aes(Date,flow,fill=Name))+geom_col()
 
-gg<- gg +ggtitle('Imputed Flows')+xlab("Date")+ylab('Net Flow (mm)')
+gg<- gg +ggtitle('Imputed Flows')+xlab("Date")+ylab('Net Flow (mm)')+
+    scale_y_continuous(label=comma)
 gg
 ```
 
@@ -336,12 +340,42 @@ gg<-  cum_flows %>%
 gg<-gg<- gg +geom_col(width = 40)
 gg<- gg + geom_abline(slope=0,intercept=0)
 gg<- gg + ggtitle('Dodge and Cox Mutual Fund Cumulative Flows')+xlab("Date")+ylab('Net Flow (mm)')
-gg<-gg+scale_fill_manual(values = c("orange"),guide=FALSE)
+gg<-gg+scale_fill_manual(values = c("orange"),guide=FALSE)+
+    scale_y_continuous(label=comma)
+
 gg
 ```
 
+#Look at annual flows.
+```{r}
+annl_flow<-flows %>% 
+  mutate(year=year(Date)) %>% 
+  group_by(year) %>% 
+  summarise(NetFlow=sum(flow))
 
-What are the top flow gainers and losers over the last five years?
+gg<-  annl_flow %>% ggplot(aes(x=year, y=NetFlow,fill='orange')) +geom_col()
+gg<- gg + geom_abline(slope=0,intercept=0)
+gg<- gg + ggtitle('Dodge and Cox Mutual Fund Annual Flows')+xlab("Date")+ylab('Net Flow (mm)')
+gg<-gg+scale_fill_manual(values = c("orange"),guide=FALSE)+
+    scale_y_continuous(label=comma)
+gg
+
+```
+Dodge and Cox has been struggling with a tepid, varying flows marked by the banner year of 2014, when International Stock and Income Fund took off.
+
+#Look at individual funds.
+```{r, message=FALSE, warning=FALSE}
+
+flows %>% ungroup() %>% 
+  group_by(ticker) %>% 
+  ggplot(aes(x=Date,y=cum_flow,color=Name))+ geom_line()+
+  geom_hline(yintercept = 1,linetype=1)+
+  scale_y_continuous(label=comma)+
+  labs(y="Cumulative Net Flow (mm)")
+
+```
+
+What are the top flow gainers and losers since the financial crisis of 2008?
 
 ```{r, message=FALSE, warning=FALSE}
 sum_flows<-flows %>% group_by(Name) %>% summarize(cum_flow=sum(flow)) 
@@ -349,40 +383,62 @@ sum_flows<-flows %>% group_by(Name) %>% summarize(cum_flow=sum(flow))
 sum_flows$Name<-factor(sum_flows$Name,
                        levels = sum_flows$Name[order(sum_flows$cum_flow,decreasing = F)])
 gg<-ggplot(sum_flows,aes(x=Name,y=cum_flow))+geom_col(fill="orange")
-gg<- gg +ggtitle('Dodge & Cox Flow Top Winners and losers')+ylab('Net 10-Year Flow (mm)')+xlab('Fund')+coord_flip()
+gg<- gg +ggtitle('Dodge & Cox Flow Top Winners and losers')+
+  ylab('Net 10-Year Flow (mm)')+
+  xlab('Fund')+
+  coord_flip()+
+  scale_y_continuous(label=comma)
+gg
+```
+How about the last five years?
+```{r, message=FALSE, warning=FALSE}
+sum_flows<-flows %>% 
+  filter(Date<Sys.Date()-(365.25*5)) %>% 
+  group_by(Name) %>% 
+  summarize(cum_flow=sum(flow)) 
+
+sum_flows$Name<-factor(sum_flows$Name,
+                       levels = sum_flows$Name[order(sum_flows$cum_flow,decreasing = F)])
+gg<-ggplot(sum_flows,aes(x=Name,y=cum_flow))+geom_col(fill="orange")
+gg<- gg +ggtitle('Dodge & Cox Flow Top Winners and losers')+
+  ylab('Net 5-Year Flow (mm)')+
+  xlab('Fund')+
+  coord_flip()+
+  scale_y_continuous(label=comma)
 gg
 ```
 
 #Focus on the Biggest Fund
 
-Interestingly, their biggest fund, Stock, has been flat in outflows. The fund is 5-Star, top decile performance over three years and the management team is long tenured.  How does it look over time?
+Interestingly, their biggest fund, Stock, has been in outflows. The fund is 5-Star, top decile performance over three years and the management team is long tenured.  How does it look over time?
 
 ```{r}
-# use a Hodrick-Prescott filter to smooth the monthly data
-#hpfilter(SGENX),freq=10,type = 'lambda')[2]$trend
-
-gg<-flows %>% filter(ticker=='DODIX') %>% ggplot(aes(x=Date,y=cum_flow))
+gg<-flows %>% 
+  filter(ticker=='DODGX') %>% 
+  ggplot(aes(x=Date,y=cum_flow))
 
 gg<- gg+geom_col(fill='orange') #+geom_smooth()
 #gg<- gg+geom_smooth()
 
 gg<-gg+geom_abline(slope=0,intercept=0)
-gg<- gg +ggtitle('Dodge & Cox Stock Monthly Flows')+xlab("Date")+ylab('Net Flow (mm)')
+gg<- gg +ggtitle('Dodge & Cox Stock Cumulative Flows')+
+  xlab("Date")+ylab('Net Flow (mm)')+
+  scale_y_continuous(label=comma)
 gg
 
 ```
-We can see the hangover from the financial crisis which coincided with team departures, but they have recovered since.
+Steady outflows, despite a bull market since the crisis. 
+How does performance vs. peers look?
 ```{r}
 filter(Funds,ticker=='DODGX')%>%select(starts_with('Peer'))
 ```
-Performance has been  stellar of late vs. peers. How about vs. the benchmark, MSCI World?
+Performance has been  stellar of late vs. peers. How about vs. the benchmark, the S&P 500?
 
-#LIMIT OF CONVERSION
 ```{r}
 # select fund benchmark and rebase.
-fund<-'FE Global'
-bench<-filter(Funds,Name==fund)$Benchmark
-temp<-bind_rows(filter(aumret,Name==fund),filter(ndxRet,Name==bench))
+fund<-'DODGX'
+bench<-filter(Funds,ticker==fund)$Benchmark
+temp<-bind_rows(filter(aumret,ticker==fund),filter(ndxRet,Name==bench))
 
 gg<-ggplot(temp,aes(x=Date,y=Wealth,color=Name))+geom_line()
 gg<-gg+ scale_colour_manual(values = c("orange", "black"))
@@ -391,9 +447,9 @@ gg
 
 ```
 
-Global has not been too bad during the past ten years but it's glory days were during the financial crisis.  How has it looked since the bottom?
+Here we see the clue to the outflows. Great relative performance and a bull market are not enough to resist the onslaught of passive investing when the S&P500 is so strong. The fund has a value orientation and value has underperformed growth since the crisis.
 
-Compare the tidy-ish code to the commented out xts/zoo code beneath it. Tidy code is much more parsimonious.  Though, to be fair, long-form tidy data feeds better into ggplot2.
+SIDEBAR: Compare the tidy-ish code to the commented out xts/zoo code beneath it. Tidy code is much more parsimonious.  Though, to be fair, we are biased to use long-form tidy data because it feeds better into ggplot2.
 ```{r}
 tempShort<-temp %>% filter(Date>as.Date('2009-02-01'))
 #rebase wealth index
@@ -443,7 +499,7 @@ ggplot(qr,aes(x=Period))+
   scale_fill_manual(values=c("DarkGreen","LightGreen","Orange","Red"))
   #scale_fill_brewer(palette = "RdYlGn",direction=-1)
 ```
-Now look at the distribution weighted by AUM
+Now look at the distribution weighted by AUM.  This perspective gives a better look at the experience of the typical investor.
 
 ```{r}
 
@@ -453,14 +509,28 @@ ggplot(qr,aes(x=Period))+
   scale_fill_manual(values=c("DarkGreen","LightGreen","Orange","Red"))
 
 ```
-The three year rankings look better than than the five year. The difference between the by-fund and the by-AUM perspectives means that a few jumbo funds are driving performance of the whole family.
+Strong performance all around, with all their AUM in the top half on a 5-year basis, even the funds in heavy outflows.
+
 
 # Performance vs. Benchmarks
 
 Active managers are challenged to beat, not just their peers, but their index benchmarks.  Let's take a couple perspectives on that.  
-```{r}
-t<-cumprod(1+xts::last(ndxRet,'3 years'))%>%xts::last()-1
-base::t(as.data.frame(t))
+```{r, message=FALSE, warning=FALSE}
+#source("utilities.r")
+all_data<-bind_rows(flows,ndxRet) %>% group_by(ticker)
+for (f in Funds$ticker){
+  bm<-Funds %>% filter(ticker==f) %>% pull(Benchmark)
+  f_vs_bm<-all_data %>% filter(ticker==f|ticker==bm)
+  start<-f_vs_bm %>% filter(ticker==f) %>% pull(Date) %>% first()
+  f_vs_bm<-f_vs_bm %>% filter(Date>=start)
+  gg<-chart_cum_returns(f_vs_bm,
+                        name_col='Name',
+                        ret_col='Return',
+                        date_col='Date'
+                        )
+  print(gg)
+}
+  
 ```
 
 
