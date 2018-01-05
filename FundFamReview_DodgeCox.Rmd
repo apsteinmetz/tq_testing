@@ -354,7 +354,7 @@ gg<-gg+scale_fill_manual(values = c("orange"),guide=FALSE)+
 gg
 
 ```
-Dodge and Cox has been struggling with a tepid, varying flows marked by the banner year of 2014, when International Stock and Income Fund took off.
+Dodge and Cox has been struggling with tepid, varying flows marked by the banner year of 2014, when International Stock and Income Fund took off.
 
 #Look at individual funds.
 ```{r, message=FALSE, warning=FALSE}
@@ -504,32 +504,8 @@ Strong performance all around, with all their AUM in the top half on a 5-year ba
 # Performance vs. Benchmarks
 
 Active managers are challenged to beat, not just their peers, but their index benchmarks.  Let's take a couple perspectives on that.  First look at all the funds in our sample vs. their benchmarks.  We we repeat the chart for D&C Stock already seen above.
-```{r, message=FALSE, warning=FALSE}
-#source("utilities.r")
-all_data<-bind_rows(flows,ndxRet) %>% group_by(ticker)
-for (f in Funds$ticker){
-  bm<-Funds %>% filter(ticker==f) %>% pull(Benchmark)
-  f_vs_bm<-all_data %>% filter(ticker==f|ticker==bm)
-  start<-f_vs_bm %>% filter(ticker==f) %>% pull(date) %>% first()
-  f_vs_bm<-f_vs_bm %>% filter(date>=start)
-  gg<-chart_cum_returns(f_vs_bm,
-                        name_col='name',
-                        ret_col='return',
-                        date_col='date'
-                        )
-  gg<-gg+
-    geom_line(size=2)+
-    theme_tq()+
-    scale_color_tq()+
-    scale_y_continuous(labels=dollar)+
-    labs(x="date",y="Wealth",title="Performance vs. Benchmark")+
-    guides(col = guide_legend(title = NULL))
-  print(gg)
-}
-  
-```
 
-It might be nice to turn these charts into a facet plot but adding two series per facet is a little tricky.  Let's try.  We will create a data frame where the fund return and the benchmark return are two columns for each date.  This data frame is not completely tidy.
+It might be nice to turn these charts into a facet plot but adding two series per facet is a little tricky.  Let's try.  We will create a data frame where the fund return and the benchmark return are two columns for each date.  This data frame is not completely tidy.  Do it by joining the fund returns to the Funds table which has the meta data including benchmark.  Then join the result to the `ndx_ret` table for the index returns.  Finally, rebase the wealth column to align with the start dates of the funds if they start after the start of the index data.
 ```{r, warning=FALSE}
 #make a new frame with fund return and benchmark return in different columns
 comp_ret<-flows %>% rename(fund_name=name,Ra=return,Wa=Wealth) %>% 
@@ -538,7 +514,9 @@ comp_ret<-flows %>% rename(fund_name=name,Ra=return,Wa=Wealth) %>%
                    Wb=Wealth,
                    Benchmark=ticker)) %>%
   rename(Rb=return,benchmark=Benchmark) %>% 
-  select(date,ticker,fund_name,Ra,Wa,benchmark,Rb,Wb)
+  select(date,ticker,fund_name,Ra,Wa,benchmark,Rb,Wb) %>% 
+  mutate(Wa=cumprod(1+Ra)) %>% 
+  mutate(Wb=cumprod(1+Rb))
 
 #plot it facet style
 comp_ret %>% ggplot(aes(date,Wa,group=fund_name,color="Fund"))+
@@ -551,7 +529,46 @@ comp_ret %>% ggplot(aes(date,Wa,group=fund_name,color="Fund"))+
   scale_color_tq()+
   facet_wrap(~fund_name, scale='free')
 ```
-Much prettier!
 
+```{r}
+CR<-comp_ret %>% tq_performance(Ra,Rb,performance_fun=UpDownRatios) %>% 
+  mutate(CaptureRatio=UpCapture/DownCapture) %>% 
+  rename(Fund=fund_name)
+kable(CR,digits=3)
+```
+```{r}
+#Do a fancy capture ratio chart
+# define shaded regions
+LIMIT_SCALE = FALSE
+weakZone <- data.frame(x=c(0.5,1.0,1.0,1.5,1.5),y=c(0.5,0.5,1.0,1.0,1.5))
+strongZone <- data.frame(x=c(0.5,0.5,1.0,1.0,1.5),y=c(0.5,1.0,1.0,1.5,1.5))
+# plot using ggplot2
+gg<-ggplot(CR,aes(DownCapture,UpCapture))+geom_point()
+#gg<-gg+theme_classic()
 
-Downside protection is a key attribute advisors focus on. 
+# shaded backgrounds
+gg<-gg+annotate("rect",xmin = 0.5,ymin=1,xmax=1,ymax = 1.5,fill='green',alpha=0.5)
+gg<-gg+annotate("rect",xmin = 1,ymin=0.5,xmax=1.5,ymax = 1,fill='red',alpha=0.5)
+gg<-gg+geom_polygon(data=weakZone,aes(x=x,y=y),fill='red',alpha=0.1)
+gg<-gg+geom_polygon(data=strongZone,aes(x=x,y=y),fill='green',alpha=0.1)
+
+# lines
+gg<-gg+geom_abline(intercept = 0,slope = 1,color='black',size=1,linetype='dashed')
+gg<-gg+geom_vline(xintercept = 1,color='black',size=1)
+gg<-gg+geom_hline(yintercept = 1,color='black',size=1)
+
+# Text elements. Make sure text labels don't overlap
+gg<-gg + geom_text_repel(label=CR$Fund,size=3)
+gg<-gg+ggtitle('Client Experience')
+gg<-gg+theme(plot.title=element_text(size=20,face='bold'))
+# limit range. funds outside of range not plotted
+if (LIMIT_SCALE) gg<-gg+xlim(c(0.5,1.5))+ylim(c(0.5,1.5))+coord_equal()
+gg<-gg+annotate("text",x=1.2,y=0.7,label=paste('Capture Ratios'),size=5)
+print(gg)
+
+```
+We see that the two domestic equity funds, Balanced and Stock, underperformed. The Income and Global funds have been steady outperformers.
+
+Downside protection is a key attribute advisors focus on. Use the `UpDownRatios` function from the `performanceAnalytics` to measure this.
+Now plot it on a fancy hand-rolled chart.
+
