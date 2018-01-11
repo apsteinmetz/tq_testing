@@ -165,7 +165,8 @@ ndxRet<-rawDataNdx %>%
   mutate(wealth=cumprod(1+return)) %>% 
   separate(symbol,into="ticker",extra="drop") %>% 
   mutate(name=ticker) %>% 
-  select(ticker,name,date,Value,return,wealth)
+  select(ticker,name,date,Value,return,wealth) %>% 
+  group_by(name)
 head(ndxRet)
 ```
 
@@ -209,13 +210,12 @@ NOTE: Now convert everything to monthly?  Not today. While not needed here some 
 ```{r}
 #Introduces tibbletime package
 aumret<-aumret %>% 
+  arrange(date) %>% 
   as_tbl_time(index=date) %>% 
   as_period(period="monthly",side="end",include_endpoints=F) %>% 
   #rebuild return from wealth at monthly frequency
   mutate(return=na.fill(wealth/lag(wealth)-1,0)) %>% 
   as_data_frame() #undo tibbletime
-
-head(aumret)
 
 ```
 
@@ -416,7 +416,7 @@ Here we see the clue to the outflows. Great relative performance and a bull mark
 
 Note I am using the benchmarks that Bloomberg has assigned.  These might not be the most appropriate (Russell value might be better in this case) or the ones the fund company uses in the prospectus.
 
-#Peer Group Rankings
+#Family Peer Group Rankings
 
 Now let's look at the broader complex.  Bloomberg has  it's own peer group rankings.  They are not going to be the same as Morningstar or Lipper but I have found they line up pretty closely.  There may be some categories that don't line up so compare before assuming for any specific fund.
 
@@ -489,8 +489,7 @@ The client experience is not just about total return.  Risk enters into it as we
 
 ```{r}
 CR<-comp_ret %>% tq_performance(Ra,Rb,performance_fun=UpDownRatios) %>% 
-  mutate(CaptureRatio=UpCapture/DownCapture) %>% 
-  rename(Fund=fund_name)
+  mutate(CaptureRatio=UpCapture/DownCapture)
 kable(CR,digits=3)
 ```
 Now plot it on a fancy hand-rolled chart.
@@ -517,7 +516,7 @@ gg<-gg+geom_vline(xintercept = 1,color='black',size=1)
 gg<-gg+geom_hline(yintercept = 1,color='black',size=1)
 
 # Text elements. Make sure text labels don't overlap
-gg<-gg + geom_text_repel(label=CR$Fund,size=3)
+gg<-gg + geom_text_repel(label=CR$fund_name,size=3)
 gg<-gg+ggtitle('Client Experience')
 gg<-gg+theme(plot.title=element_text(size=20,face='bold'))
 # limit range. funds outside of range not plotted
@@ -553,52 +552,71 @@ comp_ret %>%
 
 Next we drill into some of the data. For the following tables and charts we use the PerformanceAnalytics package, which includes many investment return time series analysis functions.
 
-Let's look at the CAPM stats.
+Let's look at the CAPM stats. We assume the risk free rate is 1.00%
 
 ```{r, message=FALSE, warning=FALSE}
-sr<-RaRb %>%
-  tq_performance(Ra = Ra, Rf=Rf,performance_fun = SharpeRatio.annualized)
+sr<-comp_ret %>%
+  tq_performance(Ra = Ra, Rf=0.01/12,performance_fun = SharpeRatio.annualized)
 
-cagr<-RaRb %>% 
+names(sr)<-c("fund_name","Sharpe")
+cagr<-comp_ret %>% 
   tq_performance(Ra = Ra, performance_fun = Return.annualized)
 
-capm<-RaRb %>% tq_performance(
+capm<-comp_ret %>% tq_performance(
           Ra=Ra,
           Rb=Rb,
-          Rf=Rf,
+          Rf=0.01/12,
           scale=12,
           performance_fun = table.CAPM)
 
-left_join(capm,sr,by='Fund') %>% 
+capm<-left_join(capm,sr,by='fund_name') %>% 
   left_join(select(CR,'CaptureRatio')) %>% 
-  # left_join(data_frame(Fund=names(wide_ret_data),Volatility=apply(wide_ret_data,2,sd)*(250^.5))) %>% 
-  left_join(cagr) %>% 
-  gather(Stat,val,-Fund) %>% spread(Fund,val) %>% #transpose with column names 
-  kable(align='c',digits=3)
+  left_join(cagr)
+
+# trick to transpose with column names 
+kable(capm %>% gather(Stat,val,-fund_name) %>% spread(fund_name,val),align='c',digits=3)
 
 ```
 
-Finally, let's look at a summary of canonical performance measures in a holistic way via a "spider chart."  We have taken a bunch of stats where higher is better, normalized them around the Dodge and Cox fund at "1" and compare to the Oppenheimer Funds
+Finally, let's look at a summary of canonical performance measures in a holistic way via a "spider chart."  We have taken a bunch of stats where higher is better and normalized them where "1" is the same as the benchmark.  Note the absolute levels have varying and arbitrary meanings for the sake of easy visual comparison.
 
 ```{r, message=FALSE}
+
+spx_sharpe<-ndxRet %>% filter(name=="SPX") %>%  
+  tq_performance(Ra=return,performance_fun=SharpeRatio.annualized) %>% .[1,2] %>% pull()
+
 ratios<-capm %>% 
-  select('ActivePremium','Alpha','InformationRatio','TreynorRatio') %>% 
-  left_join(select(CR,'CaptureRatio')) %>% 
-  # left_join(data_frame(Fund=names(wide_ret_data),Volatility=apply(wide_ret_data,2,sd)*(250^.5))) %>% 
-  left_join(sr) %>% 
-  left_join(cagr) 
+  select('ActivePremium',
+         'AnnualizedAlpha',
+         'InformationRatio',
+         'TreynorRatio',
+         'CaptureRatio',
+         'Sharpe')
 
-ratio_norm<- ratios %>% 
-  gather(name,value,-1) %>% spread_(names(.)[1],"value") %>% #dplyr-style transpose
-  mutate(Opp_Global=Opp_Global/DnC_GlobalStock,
-         Opp_GlobalValue=Opp_GlobalValue/DnC_GlobalStock,
-         DnC_GlobalStock=1) %>% 
-  gather(Fund,value,-name) %>% group_by(Fund)
+#The first four values are zero if performance is the same as the benchmark but set to "1" to visualize worse than benchmark performance
+mag_factor<-5
+ratio_norm<-ratios
+ratio_norm <- ratio_norm %>% mutate(TreynorRatio=TreynorRatio*mag_factor)
+ratio_norm <- ratio_norm %>% mutate(AnnualizedAlpha=AnnualizedAlpha*mag_factor)
+ratio_norm <- ratio_norm %>% mutate(ActivePremium=ActivePremium*mag_factor)
+ratio_norm <- ratio_norm %>% mutate(ActivePremium=ActivePremium*mag_factor)
 
-gg<- ggplot(ratio_norm,aes(x=name,y=value,group=Fund,color=Fund))+geom_polygon(size=1,fill=NA)
+ratio_norm <- ratio_norm %>% mutate_at(vars(1:4),funs(.+1))
+ratio_norm <- ratio_norm %>% mutate(Sharpe=Sharpe/spx_sharpe)
+
+#transpose and tidy for chart
+ratio_norm<- ratio_norm %>% 
+  gather(name,value,-1) %>% 
+  rename(Fund=fund_name) %>% 
+  group_by(Fund) %>% 
+  arrange(Fund,name)
+
+gg<- ggplot(ratio_norm,aes(x=name,y=value,group=Fund,color=Fund))+
+  geom_polygon(size=1,fill=NA)
 gg<-gg+ylim(c(0,max(ratio_norm$value)))
-gg<-gg+ggtitle('Ratio of Selected CAPM Statistics',"Opp_Global/Global Value vs. DnC_GlobalStock")
+gg<-gg+ggtitle('Relative Selected CAPM Statistics',"Normalized vs. S&P")
 gg<-gg+ylab('Relative Level')+xlab(NULL)
+gg<-gg+geom_hline(yintercept = 1,size=2)
 gg<-gg+coord_polar()
 gg
 
