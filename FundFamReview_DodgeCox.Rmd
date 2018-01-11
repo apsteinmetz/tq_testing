@@ -8,8 +8,9 @@ Dodge & Cox, in this notebook.
 Use tidyquant framework
 
 ```{r, message=FALSE, warning=FALSE}
+library(devtools)
 #devtools::install_github("business-science/tidyquant")
-library(dplyr)
+library(broom)
 library(stringr)
 library(Rblpapi)
 library(knitr)
@@ -20,11 +21,13 @@ library(PerformanceAnalytics)
 library(ggrepel)
 library(mFilter)
 library(tidyquant)
+library(tibbletime)
 
+options(scipen = 999)
 source("utilities.r")
 ```
 
-Get the tickers of the relevant funds. 
+#Get the tickers of the relevant funds. 
 
 This section will vary depending on the ticker  source. If you scrape the web site of the fund complex, each site will have a different layout. Parsing HTML is a dark art which I accomplish through frustrating trial and error.  It does have the advantage of being self-contained within the R script.
 
@@ -44,17 +47,17 @@ Save as a csv file. "dodgecoxtickers.csv" in this example.
 ```{r, message=FALSE, warning=FALSE}
 
 dodgecoxtickers <- read_csv("dodgecoxtickers.csv")
+secs<-dodgecoxtickers$ticker
 ```
 
-Retrieve fund info and performance data.  Note we get most of the data elements in a single `tq_get/bdp` call.  Since we want `PEER RANKING` fields for both three and five years, we must call them separately since the field name is the same, must the overrides change and I don't know of a way to call multiple exclusive overrides at once.
+#Retrieve fund info and performance rankings.
+Note we get most of the data elements in a single `tq_get/bdp` call but multiple time periods at once for `PEER RANKING` is not possible.  We want `PEER RANKING` fields for both three and five years, and the field name is the same, but the overrides change. I don't know of a way to call multiple exclusive overrides at once.
 ```{r}
 yearsAgo=10
 #last day of the month preceeding the last full month yearsAgo
 START_DATE=as.Date(as.yearmon(Sys.Date())-yearsAgo-1/12)-1
 
 blpConnect()
-
-secs<-dodgecoxtickers$ticker
 
 # Get BBG Descriptive Data
 
@@ -83,7 +86,7 @@ fund5yrRank<-tq_get(secs,get="rblpapi",rblpapi_fun="bdp",
   mutate(PEER_RANKING=100-PEER_RANKING) %>% 
   rename(peer_rank_5Y=PEER_RANKING)
 ```
-Assemble data set of fund snapshots.
+#Assemble fund meta data.
 ```{r}
 
 #---------------------------------------------------
@@ -116,23 +119,20 @@ Funds[Funds$Benchmark=="",]$Benchmark="MXWO"
 raw_Funds<-as_data_frame(edit(Funds))
 nrow(raw_Funds)
 ```
-This is a pretty long list.  For the purposes of this analysis let's discard funds that are less than $1000mm in size.
+#Create the list of tickers for the funds and benchmarks.
 
+For the purposes of this analysis let's discard funds that are less than $1000mm in size.
 ```{r}
 #Remove funds with less than $1bn in AUM
 
 Funds<-filter(raw_Funds,AUM>1000)
 
- #separate those funds that pay dividends monthly.  These are probably fixed income funds.
-#Many fixed income funds declare dividends daily and, for whatever reason, BBG will
-# return NA for  DAY_TO_DAY_TOT_RETURN_GROSS_DVDS on any frequency longer than DAILY.
-#We could get daily data for all funds but that is a lot more data points than needed and
-# we don't want to bust data caps, if any.
-#This requires separate handling to convert daily periodicity to monthly.
-#get monthly dividend funds at a daily frequency
-secsD<-Funds %>% filter(DvdFreq=='Monthly') %>% pull(symbol)
-#get non-monthly dividend funds at a monthly frequency
-secsM<-Funds %>% filter(DvdFreq!='Monthly') %>% pull(symbol)
+#If needed, separate those funds that pay dividends monthly.  These are probably
+#fixed income #funds. Many fixed income funds declare dividends daily and, for
+#whatever reason, BBG will return NA for  DAY_TO_DAY_TOT_RETURN_GROSS_DVDS on
+#any frequency longer than DAILY.
+
+secs<-Funds$symbol
 
 #create list of index tickers
 ndxTicks<-Funds %>% 
@@ -143,7 +143,7 @@ ndxTicks<-Funds %>%
 
 ndxTicks<-unique(c(ndxTicks,"LD12TRUU INDEX")) #don't add if it's already there
 ```
-Get historical benchmark return data.
+#Get historical benchmark return data.
 ```{r}
 BBG_FIELDS=c('PX_LAST','DAY_TO_DAY_TOT_RETURN_GROSS_DVDS')
 BDH_OPTIONS = c("periodicitySelection"="MONTHLY")
@@ -162,23 +162,21 @@ Add wealth column and rename
 ndxRet<-rawDataNdx %>% 
   rename(Value=PX_LAST,date=date) %>% 
   mutate(return=DAY_TO_DAY_TOT_RETURN_GROSS_DVDS/100) %>% 
-  mutate(Wealth=cumprod(1+return)) %>% 
+  mutate(wealth=cumprod(1+return)) %>% 
   separate(symbol,into="ticker",extra="drop") %>% 
   mutate(name=ticker) %>% 
-  select(ticker,name,date,Value,return,Wealth)
+  select(ticker,name,date,Value,return,wealth)
 head(ndxRet)
 ```
 
 
+#Get historical AUM and return data.
+Get historical fund data. Use monthly frequency.  For bond funds, dividends are often declared daily. In these cases we need to get daily frequency and convert to monthly returns ourselves. See note below.
 
-Get historical fund data. Use monthly frequency.  For bond funds, dividends are often declared daily. In these cases we need to get daily frequency and convert to monthly returns ourselves. We use a dividend frequency of monthly to indicate that we need to might need to fetch daily return data.
-
-First, get the data at the right frequency.
 ```{r}
 BBG_FIELDS=c('FUND_TOTAL_ASSETS','DAY_TO_DAY_TOT_RETURN_GROSS_DVDS')
-# get funds that don't pay monthly dividends on a monthly frequency
 BDH_OPTIONS = c("periodicitySelection"="MONTHLY")
-rawDataM <-secsM %>% 
+rawData <-secs %>% 
   tq_get(get='rblpapi',
          rblpapi_fun='bdh',
          fields=BBG_FIELDS,
@@ -188,88 +186,41 @@ rawDataM <-secsM %>%
          ) %>%
   group_by(symbol)
 
-# get funds that pay monthly dividends on a daily frequency
-#the monthly TRR number the bbg returns is wrong so we have to 
-#get at daily frequency and convert it ourselves
-BDH_OPTIONS = c("periodicitySelection"="DAILY")
-rawDataD <-secsD %>% 
-  tq_get(get='rblpapi',
-         rblpapi_fun='bdh',
-         fields=BBG_FIELDS,
-         start.date = START_DATE,
-         end.date=Sys.Date(),
-         options=BDH_OPTIONS) %>%
-  group_by(symbol) 
-
-
-head(rawDataD)
-head(rawDataM)
+head(rawData)
 ```
-Now convert everything to monthly and join.
+Rename columns and create wealth series.
 
-Start with funds where monthly frequency provides correct total return data to begin with.
 ```{r}
-#rename and prepare to index returns as Wealth
-#interpolate AUM where missing
-aumretM<-rawDataM %>%
+aumret<-rawData %>%
   group_by(symbol) %>% 
-      mutate(date=date,
-            AUM=na.approx(FUND_TOTAL_ASSETS,na.rm=F),
-            return=DAY_TO_DAY_TOT_RETURN_GROSS_DVDS/100,
-            Wealth=cumprod(1+DAY_TO_DAY_TOT_RETURN_GROSS_DVDS/100)
+  mutate(date=date,
+         AUM=na.approx(FUND_TOTAL_ASSETS,na.rm=F),
+         return=na.fill(DAY_TO_DAY_TOT_RETURN_GROSS_DVDS/100,0)
   ) %>% 
-  select(symbol,date,AUM,return,Wealth)
-```
-
-Use daily returns for funds where monthly total return data is wrong due to daily accrual.  Convert to monthly.  Skip if no funds have have daily accrual (which is revealed by monthly dividend distributions in fixed income funds.)
-```{r}
-if (nrow(rawDataD)>0){
-  #convert daily data to monthly returns
-  #split out AUM and return data since no transformation needs to be done
-  #to change AUM to a monthly frequency
-  rawAumD<-rawDataD %>% 
-    group_by(symbol) %>% 
-    mutate(date=date,
-           AUM=na.approx(FUND_TOTAL_ASSETS,na.rm=F)
-    ) %>% 
-    select(symbol,date,AUM)
-  
-  
-  rawreturnsD<-rawDataD %>% 
-    group_by(symbol) %>% 
-    mutate(date=date,
-           Wealth=cumprod(1+DAY_TO_DAY_TOT_RETURN_GROSS_DVDS/100)
-    ) %>% 
-    select(symbol,date,Wealth)
-  
-  
-#compute monthly returns using tq_transmute and periodreturn from Quantmod package
-  rawreturnsD <- rawreturnsD %>%  
-    group_by(symbol) %>% 
-    tq_transmute(select="Wealth",
-                 mutate_fun=periodreturn,
-                 period="monthly",
-                 col_rename="return") %>% 
-    mutate(Wealth=cumprod(1+return))
-  
-  aumretD<- rawreturnsD %>% 
-    left_join(rawAumD,by=c("date","symbol"))
-  
-  aumret<-bind_rows(aumretD,aumretM)
-} else{
-  aumret<-aumretM
-}
-
-#change symbol to bare ticker and long name
-aumret<-aumret %>% 
-  ungroup() %>% 
+  mutate(wealth=cumprod(1+return)) %>% 
   left_join(select(Funds,symbol,ticker,name),by='symbol') %>% 
-  select(ticker,name,date,AUM,return,Wealth) %>% 
-  group_by(name)
-
+  group_by(name) %>% 
+  select(ticker,name,date,AUM,wealth,return)
 head(aumret)
 ```
 
+NOTE: Now convert everything to monthly?  Not today. While not needed here some funds are on a daily accural schedule.  In this case the monthly total returns from Bloomberg will be wrong.  I typically flag those by testing for `DVD_FREQ='MONTHLY'`.  In that case use `BDH_OPTIONS = c("periodicitySelection"="DAILY")' for return retrieval and then convert to monthly using the code below.  Not needed here but it doesn't hurt anything to run it.
+
+```{r}
+#Introduces tibbletime package
+aumret<-aumret %>% 
+  as_tbl_time(index=date) %>% 
+  as_period(period="monthly",side="end",include_endpoints=F) %>% 
+  #rebuild return from wealth at monthly frequency
+  mutate(return=na.fill(wealth/lag(wealth)-1,0)) %>% 
+  as_data_frame() #undo tibbletime
+
+head(aumret)
+
+```
+
+
+#Impute Flows
 Next we can impute flows from the change in AUM net of return.
 ```{r}
 #impute flows from change in AUM net of return
@@ -278,7 +229,7 @@ flows<-aumret %>%
   mutate(flow=AUM-((1+return)*lag(AUM))) %>% 
   mutate(flow=na.fill(flow,0)) %>% 
   mutate(cum_flow=cumsum(flow))
-rm(aumret)
+#rm(aumret)
 flows
 ```
 #Family Assets Under Management
@@ -303,7 +254,7 @@ gg
 ```{r}
 gg<-flows %>% 
   filter(date>as.Date("2009-01-01")) %>% 
-  ggplot(aes(date,flow))+geom_col()
+  ggplot(aes(date,flow))+geom_col(width = 20)
 
 gg<- gg +ggtitle('Imputed Flows')+xlab("date")+ylab('Net Flow (mm)')+
     scale_y_continuous(label=comma)+
@@ -312,12 +263,13 @@ gg<- gg +ggtitle('Imputed Flows')+xlab("date")+ylab('Net Flow (mm)')+
 
 gg
 ```
+I don't like the look of those monthly gyrations in 2010 but I can't find any reason to suspect they are wrong.
 
 #How do cumulative flows look?
 
 ```{r, warning=FALSE}
 #create cumulative
-cum_flows<-flows %>% 
+cum_flows<-flows %>% as_data_frame() %>% 
   select(date,name,cum_flow) %>% 
   spread(name,cum_flow) %>% 
   {.}
@@ -408,6 +360,7 @@ gg<- gg +ggtitle('Dodge & Cox Flow Top Winners and Losers')+
 
 gg
 ```
+Ouch.
 
 #Focus on the Biggest Fund
 
@@ -453,14 +406,15 @@ gg<-gg+
     theme_tq()+
     scale_color_tq()+
     scale_y_continuous(labels=dollar)+
-    labs(x="date",y="Wealth",title="Performance vs. Benchmark")+
+    labs(x="date",y="wealth",title="Performance vs. Benchmark")+
     guides(col = guide_legend(title = NULL))
 gg
 
 ```
 
-Here we see the clue to the outflows. Great relative performance and a bull market are not enough to resist the onslaught of passive investing when the S&P500 is so strong. The fund has a value orientation and value has underperformed growth since the crisis.
+Here we see the clue to the outflows. Great relative performance and a bull market are not enough to resist the onslaught of passive investing when the S&P500 is so strong. The S&P500 index has a strong growth stock bias.  The fund has a value orientation and value has underperformed growth since the crisis.
 
+Note I am using the benchmarks that Bloomberg has assigned.  These might not be the most appropriate (Russell value might be better in this case) or the ones the fund company uses in the prospectus.
 
 #Peer Group Rankings
 
@@ -468,7 +422,7 @@ Now let's look at the broader complex.  Bloomberg has  it's own peer group ranki
 
 First look at the distribution of quartile ranks by number of funds. A lower quartile number is better.  Cool visualization.
 
-```{r}
+```{r, warning=FALSE}
 #create quartile ranks
 qr<-data_frame(name=Funds$name,
                AUM=Funds$AUM,
@@ -505,13 +459,13 @@ Strong performance all around, with all their AUM in the top half on a 5-year ba
 
 Active managers are challenged to beat, not just their peers, but their index benchmarks.  Let's take a couple perspectives on that.  First look at all the funds in our sample vs. their benchmarks.  We we repeat the chart for D&C Stock already seen above.
 
-It might be nice to turn these charts into a facet plot but adding two series per facet is a little tricky.  Let's try.  We will create a data frame where the fund return and the benchmark return are two columns for each date.  This data frame is not completely tidy.  Do it by joining the fund returns to the Funds table which has the meta data including benchmark.  Then join the result to the `ndx_ret` table for the index returns.  Finally, rebase the wealth column to align with the start dates of the funds if they start after the start of the index data.
-```{r, warning=FALSE}
+It might be nice to turn these charts into a facet plot but adding two series per facet is a little tricky.  Let's try.  We will create a data frame where the fund return and the benchmark return are two columns for each date.  Do it by joining the fund returns to the Funds table which has the meta data including benchmark (this data frame is not completely tidy).  Then join the result to the `ndx_ret` table for the index returns.  Finally, rebase the wealth column to align with the start dates of the funds if they start after the start of the index data.
+```{r, message=FALSE, warning=FALSE}
 #make a new frame with fund return and benchmark return in different columns
-comp_ret<-flows %>% rename(fund_name=name,Ra=return,Wa=Wealth) %>% 
+comp_ret<-flows %>% rename(fund_name=name,Ra=return,Wa=wealth) %>% 
   left_join(select(Funds,ticker,Benchmark)) %>% 
-  left_join(rename(select(ndxRet,date,ticker,return,Wealth),
-                   Wb=Wealth,
+  left_join(rename(select(ndxRet,date,ticker,return,wealth),
+                   Wb=wealth,
                    Benchmark=ticker)) %>%
   rename(Rb=return,benchmark=Benchmark) %>% 
   select(date,ticker,fund_name,Ra,Wa,benchmark,Rb,Wb) %>% 
@@ -524,11 +478,14 @@ comp_ret %>% ggplot(aes(date,Wa,group=fund_name,color="Fund"))+
   geom_line(aes(date,Wb,group=fund_name,color="Benchmark"))+
   guides(col = guide_legend(title = NULL))+
   scale_y_continuous(labels=dollar)+
-  labs(x="Date",y="Wealth",title="Performance vs. Relevant Benchmark")+
+  labs(x="Date",y="wealth",title="Performance vs. Relevant Benchmark")+
   theme_tq()+
   scale_color_tq()+
   facet_wrap(~fund_name, scale='free')
 ```
+The global funds have beaten their benchamrks but the domestic funds have not.  The domestic funds HAVE beaten their peers pursuing similar value strategies, as we've seen.  That wasn't enought to stem large outflows.
+
+The client experience is not just about total return.  Risk enters into it as well.  In particular, downside protection is a key attribute advisors focus on (nobody complains about upside risk). Use the `UpDownRatios` function from the `performanceAnalytics` to measure this.
 
 ```{r}
 CR<-comp_ret %>% tq_performance(Ra,Rb,performance_fun=UpDownRatios) %>% 
@@ -536,6 +493,8 @@ CR<-comp_ret %>% tq_performance(Ra,Rb,performance_fun=UpDownRatios) %>%
   rename(Fund=fund_name)
 kable(CR,digits=3)
 ```
+Now plot it on a fancy hand-rolled chart.
+
 ```{r}
 #Do a fancy capture ratio chart
 # define shaded regions
@@ -551,7 +510,7 @@ gg<-gg+annotate("rect",xmin = 0.5,ymin=1,xmax=1,ymax = 1.5,fill='green',alpha=0.
 gg<-gg+annotate("rect",xmin = 1,ymin=0.5,xmax=1.5,ymax = 1,fill='red',alpha=0.5)
 gg<-gg+geom_polygon(data=weakZone,aes(x=x,y=y),fill='red',alpha=0.1)
 gg<-gg+geom_polygon(data=strongZone,aes(x=x,y=y),fill='green',alpha=0.1)
-
+gg<-gg+theme(panel.background = element_rect(fill = "white"))
 # lines
 gg<-gg+geom_abline(intercept = 0,slope = 1,color='black',size=1,linetype='dashed')
 gg<-gg+geom_vline(xintercept = 1,color='black',size=1)
@@ -567,8 +526,81 @@ gg<-gg+annotate("text",x=1.2,y=0.7,label=paste('Capture Ratios'),size=5)
 print(gg)
 
 ```
-We see that the two domestic equity funds, Balanced and Stock, underperformed. The Income and Global funds have been steady outperformers.
 
-Downside protection is a key attribute advisors focus on. Use the `UpDownRatios` function from the `performanceAnalytics` to measure this.
-Now plot it on a fancy hand-rolled chart.
+#Rolling Betas
+
+Since we are working in the tidyverse, rather than zoo/xts for our time series, rollapply doesn't work.  Tidyquant doesn't adapt the rolling functions of the `performanceAnalytics` package.  Rather than convert our data frames to xts, the new tibbletime package has a function wrapper `rollify` that does the trick.  Boy, does that save some line of code!
+```{r, message=FALSE, warning=FALSE}
+
+# extract the y coefficient ("beta") from lm.
+#use cool rollify function from tibble time.
+
+beta_roll_12<-rollify(~lm(.x ~ .y)[[1]][[2]], window = 12)
+
+comp_ret <-comp_ret %>% mutate(beta=beta_roll_12(Ra,Rb))
+
+comp_ret %>% 
+  ggplot(aes(x=date,y=beta,color=fund_name))+
+  geom_smooth(se=FALSE)+
+  geom_hline(yintercept = 1,color='black',size=1)+
+  ggtitle("Rolling 12-Month Beta")+
+  theme_tq()+
+  scale_color_tq()
+
+
+```
+
+
+Next we drill into some of the data. For the following tables and charts we use the PerformanceAnalytics package, which includes many investment return time series analysis functions.
+
+Let's look at the CAPM stats.
+
+```{r, message=FALSE, warning=FALSE}
+sr<-RaRb %>%
+  tq_performance(Ra = Ra, Rf=Rf,performance_fun = SharpeRatio.annualized)
+
+cagr<-RaRb %>% 
+  tq_performance(Ra = Ra, performance_fun = Return.annualized)
+
+capm<-RaRb %>% tq_performance(
+          Ra=Ra,
+          Rb=Rb,
+          Rf=Rf,
+          scale=12,
+          performance_fun = table.CAPM)
+
+left_join(capm,sr,by='Fund') %>% 
+  left_join(select(CR,'CaptureRatio')) %>% 
+  # left_join(data_frame(Fund=names(wide_ret_data),Volatility=apply(wide_ret_data,2,sd)*(250^.5))) %>% 
+  left_join(cagr) %>% 
+  gather(Stat,val,-Fund) %>% spread(Fund,val) %>% #transpose with column names 
+  kable(align='c',digits=3)
+
+```
+
+Finally, let's look at a summary of canonical performance measures in a holistic way via a "spider chart."  We have taken a bunch of stats where higher is better, normalized them around the Dodge and Cox fund at "1" and compare to the Oppenheimer Funds
+
+```{r, message=FALSE}
+ratios<-capm %>% 
+  select('ActivePremium','Alpha','InformationRatio','TreynorRatio') %>% 
+  left_join(select(CR,'CaptureRatio')) %>% 
+  # left_join(data_frame(Fund=names(wide_ret_data),Volatility=apply(wide_ret_data,2,sd)*(250^.5))) %>% 
+  left_join(sr) %>% 
+  left_join(cagr) 
+
+ratio_norm<- ratios %>% 
+  gather(name,value,-1) %>% spread_(names(.)[1],"value") %>% #dplyr-style transpose
+  mutate(Opp_Global=Opp_Global/DnC_GlobalStock,
+         Opp_GlobalValue=Opp_GlobalValue/DnC_GlobalStock,
+         DnC_GlobalStock=1) %>% 
+  gather(Fund,value,-name) %>% group_by(Fund)
+
+gg<- ggplot(ratio_norm,aes(x=name,y=value,group=Fund,color=Fund))+geom_polygon(size=1,fill=NA)
+gg<-gg+ylim(c(0,max(ratio_norm$value)))
+gg<-gg+ggtitle('Ratio of Selected CAPM Statistics',"Opp_Global/Global Value vs. DnC_GlobalStock")
+gg<-gg+ylab('Relative Level')+xlab(NULL)
+gg<-gg+coord_polar()
+gg
+
+```
 
