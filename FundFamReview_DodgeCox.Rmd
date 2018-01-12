@@ -237,13 +237,14 @@ flows
 What does mutual fund AUM look like?
 ```{r, warning=FALSE}
 gg<-flows %>%
-  ggplot(aes(x=date,y=AUM,fill=name))+geom_col(width=40)
+  ggplot(aes(x=date,y=AUM,fill=name)) +
+  geom_col(width=40)
 gg<- gg + ggtitle('Dodge & Cox Mutual Fund AUM')+
   xlab("date")+
   ylab('Aum (mm)')+
   scale_y_continuous(label=comma)+    
-    theme_tq()+
-    scale_color_tq()
+  theme_tq()+
+  scale_fill_tq()
 
 gg
 
@@ -254,12 +255,14 @@ gg
 ```{r}
 gg<-flows %>% 
   filter(date>as.Date("2009-01-01")) %>% 
-  ggplot(aes(date,flow))+geom_col(width = 20)
+  ggplot(aes(date,flow)) + 
+  geom_col(width = 20, fill = palette_light()[[1]])
 
-gg<- gg +ggtitle('Imputed Flows')+xlab("date")+ylab('Net Flow (mm)')+
+gg<- gg +
+    ggtitle('Imputed Flows')+xlab("date")+
+    ylab('Net Flow (mm)')+
     scale_y_continuous(label=comma)+
-    theme_tq()+
-    scale_color_tq()
+    theme_tq()
 
 gg
 ```
@@ -439,7 +442,8 @@ lb<-labs(title='Fund Family Quartile Rankings',
 ggplot(qr,aes(x=Period))+
   geom_bar(aes(weight=1/nrow(qr)*2,fill=Quartile))+lb+ylab("Fraction of Funds")+
   scale_y_continuous(labels=comma)+
-  scale_fill_manual(values=c("DarkGreen","LightGreen","Orange","Red"))
+  scale_fill_manual(values=c("DarkGreen","LightGreen","Orange","Red"))+
+  theme_tq()
   #scale_fill_brewer(palette = "RdYlGn",direction=-1)
 ```
 Now look at the distribution weighted by AUM.  This perspective gives a better look at the experience of the typical investor.
@@ -449,7 +453,8 @@ Now look at the distribution weighted by AUM.  This perspective gives a better l
 ggplot(qr,aes(x=Period))+
   geom_bar(aes(weight=AUM/sum(AUM)*2,fill=Quartile))+lb+ylab("Fraction of AUM")+
   scale_y_continuous(labels=comma)+
-  scale_fill_manual(values=c("DarkGreen","LightGreen","Orange","Red"))
+  scale_fill_manual(values=c("DarkGreen","LightGreen","Orange","Red")) + 
+  theme_tq()
 
 ```
 Strong performance all around, with all their AUM in the top half on a 5-year basis, even the funds in heavy outflows.
@@ -617,7 +622,7 @@ gg<-gg+ylim(c(0,max(ratio_norm$value)))
 gg<-gg+ggtitle('Relative Selected CAPM Statistics',"Normalized vs. S&P")
 gg<-gg+ylab('Relative Level')+xlab(NULL)
 gg<-gg+geom_hline(yintercept = 1,size=2)
-gg<-gg+coord_polar()
+gg<-gg+coord_polar()+theme_tq()
 gg
 
 ```
