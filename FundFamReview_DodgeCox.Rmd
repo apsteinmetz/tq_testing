@@ -10,6 +10,7 @@ Use tidyquant framework
 ```{r, message=FALSE, warning=FALSE}
 library(devtools)
 #devtools::install_github("business-science/tidyquant")
+#devtools::install_github("business-science/tibbletime")
 library(broom)
 library(stringr)
 library(Rblpapi)
@@ -205,7 +206,8 @@ aumret<-rawData %>%
 head(aumret)
 ```
 
-NOTE: Now convert everything to monthly?  Not today. While not needed here some funds are on a daily accural schedule.  In this case the monthly total returns from Bloomberg will be wrong.  I typically flag those by testing for `DVD_FREQ='MONTHLY'`.  In that case use `BDH_OPTIONS = c("periodicitySelection"="DAILY")' for return retrieval and then convert to monthly using the code below.  Not needed here but it doesn't hurt anything to run it.
+NOTE: Now convert everything to monthly?  Not today. While not needed here some funds are on a daily accural schedule.  In this case the monthly total returns from Bloomberg will 
+be wrong.  I typically flag those by testing for `DVD_FREQ='MONTHLY'`.  In that case use `BDH_OPTIONS = c("periodicitySelection"="DAILY")' for return retrieval and then convert to monthly using the code below.  Not needed here but it doesn't hurt anything to run it.
 
 ```{r}
 #Introduces tibbletime package
@@ -243,7 +245,7 @@ gg<- gg + ggtitle('Dodge & Cox Mutual Fund AUM')+
   ylab('Aum (mm)')+
   scale_y_continuous(label=comma)+    
     theme_tq()+
-    scale_color_tq()
+    scale_fill_tq()
 
 gg
 
